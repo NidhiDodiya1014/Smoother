@@ -1,24 +1,35 @@
-import Container from "react-bootstrap/Container";
-import Nav from "react-bootstrap/Nav";
-import Navbar from "react-bootstrap/Navbar";
+import { Link } from "react-router-dom";
 
-function navbar() {
+function Navbar() {
   return (
-    <Navbar expand="lg" bg="dark" variant="dark">
-      <Container>
-        <Navbar.Brand href="/">Smoother</Navbar.Brand>
+    <nav className="navbar navbar-expand-lg navbar-custom">
+      <div className="container-fluid" style={{ maxWidth: '1400px', margin: '0 auto', padding: '0 20px' }}>
+        <Link to="/" className="navbar-brand-custom">Smoother</Link>
 
-        <Navbar.Toggle aria-controls="basic-navbar-nav" />
+        <button
+          className="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+          style={{
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            borderRadius: '8px',
+            padding: '8px 12px',
+            background: 'rgba(255, 255, 255, 0.1)'
+          }}
+        >
+          <span style={{ color: 'white' }}>☰</span>
+        </button>
 
-        <Navbar.Collapse id="basic-navbar-nav">
-          <Nav className="ms-auto">
-            <Nav.Link href="/add-song">Add Song</Nav.Link>
-            <Nav.Link href="/current">Current</Nav.Link>
-          </Nav>
-        </Navbar.Collapse>
-      </Container>
-    </Navbar>
+        <div className="collapse navbar-collapse" id="navbarNav">
+          <div className="navbar-nav ms-auto">
+            <Link to="/add-song" className="nav-link-custom">Add Song</Link>
+            <Link to="/current" className="nav-link-custom">Current</Link>
+          </div>
+        </div>
+      </div>
+    </nav>
   );
 }
 
-export default navbar;
+export default Navbar;

@@ -31,13 +31,11 @@ function App() {
           element={<Home addToQueue={addToQueue} queue={queue} />}
         />
         <Route path="/add-song" element={<AddSong />} />
+        <Route
+          path="/current"
+          element={<Current queue={queue} removeFromQueue={removeFromQueue} clearQueue={clearQueue} />}
+        />
       </Routes>
-
-      <Current
-        queue={queue}
-        removeFromQueue={removeFromQueue}
-        clearQueue={clearQueue}
-      />
     </Router>
   );
 }
