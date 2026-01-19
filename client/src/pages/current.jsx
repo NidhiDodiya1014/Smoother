@@ -31,6 +31,21 @@ function Current({ queue, removeFromQueue, clearQueue }) {
   }, [currentIndex]);
 
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && audioRef.current && isPlaying) {
+        audioRef.current.play().catch(err => {
+          console.error("Background play failed:", err);
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isPlaying]);
+
+  useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
@@ -66,6 +81,7 @@ function Current({ queue, removeFromQueue, clearQueue }) {
         if (audioRef.current) {
           audioRef.current.play();
           setIsPlaying(true);
+          navigator.mediaSession.playbackState = 'playing';
         }
       });
 
@@ -73,6 +89,7 @@ function Current({ queue, removeFromQueue, clearQueue }) {
         if (audioRef.current) {
           audioRef.current.pause();
           setIsPlaying(false);
+          navigator.mediaSession.playbackState = 'paused';
         }
       });
 
@@ -87,8 +104,19 @@ function Current({ queue, removeFromQueue, clearQueue }) {
           audioRef.current.currentTime = Math.min(duration, audioRef.current.currentTime + 10);
         }
       });
+
+      if (audioRef.current) {
+        const updatePlaybackState = () => {
+          if (audioRef.current) {
+            navigator.mediaSession.playbackState = audioRef.current.paused ? 'paused' : 'playing';
+          }
+        };
+        audioRef.current.addEventListener('play', updatePlaybackState);
+        audioRef.current.addEventListener('pause', updatePlaybackState);
+        updatePlaybackState();
+      }
     }
-  }, [currentIndex, queue, duration]);
+  }, [currentIndex, queue, duration, isPlaying]);
 
   const playQueue = () => {
     if (queue.length === 0) return;
@@ -100,8 +128,24 @@ function Current({ queue, removeFromQueue, clearQueue }) {
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
+        setIsPlaying(false);
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.playbackState = 'paused';
+        }
       } else {
-        audioRef.current.play();
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+              if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = 'playing';
+              }
+            })
+            .catch(error => {
+              console.error("Play failed:", error);
+            });
+        }
       }
     }
   };
@@ -233,6 +277,18 @@ function Current({ queue, removeFromQueue, clearQueue }) {
             <audio
               ref={audioRef}
               src={queue[currentIndex].audioUrl}
+              onPlay={() => {
+                setIsPlaying(true);
+                if ('mediaSession' in navigator) {
+                  navigator.mediaSession.playbackState = 'playing';
+                }
+              }}
+              onPause={() => {
+                setIsPlaying(false);
+                if ('mediaSession' in navigator) {
+                  navigator.mediaSession.playbackState = 'paused';
+                }
+              }}
               preload="auto"
               playsInline
               crossOrigin="anonymous"

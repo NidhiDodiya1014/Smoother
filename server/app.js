@@ -14,7 +14,11 @@ app.use(cors());
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.send("Server is running 🚀");
+  if (process.env.NODE_ENV === 'production') {
+    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  } else {
+    res.send("Server is running 🚀");
+  }
 });
 
 
@@ -100,5 +104,12 @@ app.delete("/songs/:id", async (req, res) => {
   }
 });
 
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../client/dist')));
+  
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  });
+}
 
 module.exports = app;

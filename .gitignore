@@ -1,0 +1,12 @@
+node_modules/
+.env
+.DS_Store
+*.log
+dist/
+build/
+server/songs/*.mp3
+server/songs/*.webm
+server/.ffmpeg-bin/
+server/yt-dlp
+client/dist/
+

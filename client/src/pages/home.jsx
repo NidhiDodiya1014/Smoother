@@ -22,6 +22,21 @@ function Home({ addToQueue, queue }) {
   }, []);
 
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && audioRef.current && isPlaying) {
+        audioRef.current.play().catch(err => {
+          console.error("Background play failed:", err);
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isPlaying]);
+
+  useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = volume;
     }
@@ -77,6 +92,7 @@ function Home({ addToQueue, queue }) {
         if (audioRef.current) {
           audioRef.current.play();
           setIsPlaying(true);
+          navigator.mediaSession.playbackState = 'playing';
         }
       });
 
@@ -84,6 +100,7 @@ function Home({ addToQueue, queue }) {
         if (audioRef.current) {
           audioRef.current.pause();
           setIsPlaying(false);
+          navigator.mediaSession.playbackState = 'paused';
         }
       });
 
@@ -98,8 +115,19 @@ function Home({ addToQueue, queue }) {
           audioRef.current.currentTime = Math.min(duration, audioRef.current.currentTime + 10);
         }
       });
+
+      if (audioRef.current) {
+        const updatePlaybackState = () => {
+          if (audioRef.current) {
+            navigator.mediaSession.playbackState = audioRef.current.paused ? 'paused' : 'playing';
+          }
+        };
+        audioRef.current.addEventListener('play', updatePlaybackState);
+        audioRef.current.addEventListener('pause', updatePlaybackState);
+        updatePlaybackState();
+      }
     }
-  }, [expandedSong, duration]);
+  }, [expandedSong, duration, isPlaying]);
 
   const loadSongs = async () => {
     try {
@@ -134,10 +162,25 @@ function Home({ addToQueue, queue }) {
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
+        setIsPlaying(false);
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.playbackState = 'paused';
+        }
       } else {
-        audioRef.current.play();
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+              if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = 'playing';
+              }
+            })
+            .catch(error => {
+              console.error("Play failed:", error);
+            });
+        }
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
@@ -236,8 +279,18 @@ function Home({ addToQueue, queue }) {
             <audio
               ref={audioRef}
               src={expandedSong.audioUrl}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
+              onPlay={() => {
+                setIsPlaying(true);
+                if ('mediaSession' in navigator) {
+                  navigator.mediaSession.playbackState = 'playing';
+                }
+              }}
+              onPause={() => {
+                setIsPlaying(false);
+                if ('mediaSession' in navigator) {
+                  navigator.mediaSession.playbackState = 'paused';
+                }
+              }}
               preload="auto"
               playsInline
               crossOrigin="anonymous"
@@ -380,6 +433,9 @@ function Home({ addToQueue, queue }) {
                   }}
                   src={song.audioUrl}
                   onEnded={() => setPlayingSongId(null)}
+                  preload="auto"
+                  playsInline
+                  crossOrigin="anonymous"
                   style={{ display: 'none' }}
                 />
               </div>
