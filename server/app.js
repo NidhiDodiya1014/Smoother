@@ -17,11 +17,7 @@ app.use(cors({
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
-  } else {
-    res.send("Server is running 🚀 yay");
-  }
+  res.send("Smoother backend is running 🚀");
 });
 
 
