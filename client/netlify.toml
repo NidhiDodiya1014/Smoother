@@ -1,0 +1,9 @@
+[build]
+  base = "."
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Set this in Netlify dashboard: Site settings → Environment variables
+  # VITE_API_URL = "https://your-render-backend-url.onrender.com"
+

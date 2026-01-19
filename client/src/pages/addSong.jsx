@@ -44,8 +44,16 @@ export default function AddSong() {
       setTitle("");
       setYoutubeUrl("");
     } catch (err) {
-      console.error(err);
-      setError(err.response?.data?.error || "Something went wrong");
+      console.error('Add song error:', err);
+      console.error('API URL:', API_BASE_URL);
+      
+      if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
+        setError(`Cannot connect to server. Please check if the backend is running at ${API_BASE_URL}`);
+      } else if (err.response) {
+        setError(err.response?.data?.error || `Server error: ${err.response.status} ${err.response.statusText}`);
+      } else {
+        setError(err.message || "Something went wrong. Please check your connection and try again.");
+      }
     } finally {
       setIsLoading(false);
     }
