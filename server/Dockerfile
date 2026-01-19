@@ -2,7 +2,6 @@ FROM node:22-slim
 
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    ffprobe \
     curl \
     python3 \
     python3-pip \
