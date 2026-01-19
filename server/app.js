@@ -10,14 +10,17 @@ const cloudinary = require("cloudinary").v2;
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: "*"
+}));
+
 app.use(express.json());
 
 app.get("/", (req, res) => {
   if (process.env.NODE_ENV === 'production') {
     res.sendFile(path.join(__dirname, '../client/dist/index.html'));
   } else {
-    res.send("Server is running 🚀");
+    res.send("Server is running 🚀 yay");
   }
 });
 
@@ -104,12 +107,6 @@ app.delete("/songs/:id", async (req, res) => {
   }
 });
 
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/dist')));
-  
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
-  });
-}
+
 
 module.exports = app;
