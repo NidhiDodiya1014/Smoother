@@ -1,157 +1,50 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useCallback } from "react";
+import { useAudio } from "../contexts/AudioContext";
+import { useQueue } from "../contexts/QueueContext";
 
-function Current({ queue, removeFromQueue, clearQueue }) {
-  const audioRef = useRef(null);
-  const [currentIndex, setCurrentIndex] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [isLooping, setIsLooping] = useState(false);
+function Current() {
+  const { currentSong, isPlaying, currentTime, duration, audioRef, playSong, togglePlayPause, setCurrentTime } = useAudio();
+  const { queue, currentIndex, isLooping, setCurrentIndex, setIsLooping, removeFromQueue, clearQueue } = useQueue();
 
   const playNext = useCallback(() => {
-    setCurrentIndex(prev => {
-      if (prev !== null && prev + 1 < queue.length) {
-        return prev + 1;
-      } else if (isLooping && queue.length > 0) {
-        setIsPlaying(true);
-        return 0;
-      } else {
-        setIsPlaying(false);
-        setCurrentTime(0);
-        return null;
-      }
-    });
-  }, [queue, isLooping]);
-
-  useEffect(() => {
-    if (currentIndex !== null && audioRef.current) {
-      audioRef.current.play();
-      setIsPlaying(true);
+    if (currentIndex !== null && currentIndex + 1 < queue.length) {
+      setCurrentIndex(currentIndex + 1);
+    } else if (isLooping && queue.length > 0) {
+      setCurrentIndex(0);
+    } else {
+      setCurrentIndex(null);
     }
-  }, [currentIndex]);
+  }, [currentIndex, queue, isLooping, setCurrentIndex]);
 
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden && audioRef.current && isPlaying) {
-        audioRef.current.play().catch(err => {
-          console.error("Background play failed:", err);
-        });
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [isPlaying]);
+    if (currentIndex !== null && queue[currentIndex]) {
+      playSong(queue[currentIndex], true);
+    }
+  }, [currentIndex, queue, playSong]);
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || !currentSong) return;
 
-    const updateTime = () => setCurrentTime(audio.currentTime);
-    const updateDuration = () => setDuration(audio.duration);
     const handleEnded = () => {
-      playNext();
-    };
-
-    audio.addEventListener('timeupdate', updateTime);
-    audio.addEventListener('loadedmetadata', updateDuration);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('play', () => setIsPlaying(true));
-    audio.addEventListener('pause', () => setIsPlaying(false));
-
-    return () => {
-      audio.removeEventListener('timeupdate', updateTime);
-      audio.removeEventListener('loadedmetadata', updateDuration);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('play', () => setIsPlaying(true));
-      audio.removeEventListener('pause', () => setIsPlaying(false));
-    };
-  }, [currentIndex, queue]);
-
-  useEffect(() => {
-    if (currentIndex !== null && queue[currentIndex] && 'mediaSession' in navigator) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: queue[currentIndex].title,
-        artist: 'Smoother',
-      });
-
-      navigator.mediaSession.setActionHandler('play', () => {
-        if (audioRef.current) {
-          audioRef.current.play();
-          setIsPlaying(true);
-          navigator.mediaSession.playbackState = 'playing';
-        }
-      });
-
-      navigator.mediaSession.setActionHandler('pause', () => {
-        if (audioRef.current) {
-          audioRef.current.pause();
-          setIsPlaying(false);
-          navigator.mediaSession.playbackState = 'paused';
-        }
-      });
-
-      navigator.mediaSession.setActionHandler('previoustrack', () => {
-        if (audioRef.current) {
-          audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
-        }
-      });
-
-      navigator.mediaSession.setActionHandler('nexttrack', () => {
-        if (audioRef.current) {
-          audioRef.current.currentTime = Math.min(duration, audioRef.current.currentTime + 10);
-        }
-      });
-
-      if (audioRef.current) {
-        const updatePlaybackState = () => {
-          if (audioRef.current) {
-            navigator.mediaSession.playbackState = audioRef.current.paused ? 'paused' : 'playing';
-          }
-        };
-        audioRef.current.addEventListener('play', updatePlaybackState);
-        audioRef.current.addEventListener('pause', updatePlaybackState);
-        updatePlaybackState();
+      if (currentIndex !== null && queue[currentIndex]?._id === currentSong._id) {
+        playNext();
       }
-    }
-  }, [currentIndex, queue, duration, isPlaying]);
+    };
+
+    audio.addEventListener('ended', handleEnded);
+    return () => {
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [audioRef, currentSong, currentIndex, queue, playNext]);
 
   const playQueue = () => {
     if (queue.length === 0) return;
     setCurrentIndex(0);
   };
 
-
-  const togglePlayPause = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-        if ('mediaSession' in navigator) {
-          navigator.mediaSession.playbackState = 'paused';
-        }
-      } else {
-        const playPromise = audioRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              setIsPlaying(true);
-              if ('mediaSession' in navigator) {
-                navigator.mediaSession.playbackState = 'playing';
-              }
-            })
-            .catch(error => {
-              console.error("Play failed:", error);
-            });
-        }
-      }
-    }
-  };
-
   const handleProgressClick = (e) => {
-    if (audioRef.current && duration) {
+    if (audioRef.current && duration && currentIndex !== null && queue[currentIndex]?._id === currentSong?._id) {
       const rect = e.currentTarget.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const percentage = clickX / rect.width;
@@ -167,6 +60,8 @@ function Current({ queue, removeFromQueue, clearQueue }) {
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  const isQueueSongPlaying = currentIndex !== null && queue[currentIndex]?._id === currentSong?._id;
 
   return (
     <div className="glass-card" style={{ margin: '24px', maxWidth: '600px', marginLeft: 'auto', marginRight: 'auto' }}>
@@ -191,28 +86,49 @@ function Current({ queue, removeFromQueue, clearQueue }) {
 
         {queue.length > 0 && (
           <div style={{ marginBottom: '24px' }}>
-            {queue.map((song, index) => (
-              <div
-                key={song._id}
-                className={`queue-item ${index === currentIndex ? 'active' : ''}`}
-              >
-                <span style={{ flex: 1, color: index === currentIndex ? 'var(--accent-magenta)' : 'var(--text-primary)' }}>
-                  {song.title}
-                </span>
-                <button
-                  className="control-btn"
-                  style={{ width: '36px', height: '36px', fontSize: '16px', marginLeft: '12px' }}
-                  onClick={() => {
-                    removeFromQueue(song._id);
-                    if (index === currentIndex) {
-                      playNext();
-                    }
-                  }}
+            {queue.map((song, index) => {
+              const isThisSongCurrent = currentSong?._id === song._id;
+              const isThisSongPlaying = isThisSongCurrent && isPlaying;
+              return (
+                <div
+                  key={song._id}
+                  className={`queue-item ${currentIndex === index ? 'active' : ''}`}
+                  style={{ display: 'flex', alignItems: 'center', gap: '12px' }}
                 >
-                  ✕
-                </button>
-              </div>
-            ))}
+                  <button
+                    className="control-btn"
+                    style={{ width: '32px', height: '32px', fontSize: '14px', flexShrink: 0, cursor: 'pointer', position: 'relative', zIndex: 10 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      
+                      if (isThisSongCurrent) {
+                        togglePlayPause();
+                      } else {
+                        setCurrentIndex(index);
+                      }
+                    }}
+                  >
+                    {isThisSongPlaying ? '⏸' : '▶'}
+                  </button>
+                  <span style={{ flex: 1, color: currentIndex === index ? 'var(--accent-magenta)' : 'var(--text-primary)' }}>
+                    {song.title}
+                  </span>
+                  <button
+                    className="control-btn"
+                    style={{ width: '36px', height: '36px', fontSize: '16px', marginLeft: '12px' }}
+                    onClick={() => {
+                      removeFromQueue(song._id);
+                      if (index === currentIndex) {
+                        playNext();
+                      }
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -233,7 +149,7 @@ function Current({ queue, removeFromQueue, clearQueue }) {
           </button>
         </div>
 
-        {currentIndex !== null && queue[currentIndex] && (
+        {isQueueSongPlaying && (
           <div>
             <div style={{ marginBottom: '16px' }}>
               <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-primary)' }}>
@@ -262,8 +178,19 @@ function Current({ queue, removeFromQueue, clearQueue }) {
               }}>
                 ⏮
               </button>
-              <button className="play-pause-btn" onClick={togglePlayPause}>
-                {isPlaying ? '⏸' : '▶'}
+              <button 
+                className="play-pause-btn" 
+                style={{ cursor: 'pointer', position: 'relative', zIndex: 100, pointerEvents: 'auto' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  
+                  if (!isQueueSongPlaying) return;
+                  
+                  togglePlayPause();
+                }}
+              >
+                {isPlaying && isQueueSongPlaying ? '⏸' : '▶'}
               </button>
               <button className="control-btn" onClick={() => {
                 if (audioRef.current) {
@@ -273,27 +200,6 @@ function Current({ queue, removeFromQueue, clearQueue }) {
                 ⏭
               </button>
             </div>
-
-            <audio
-              ref={audioRef}
-              src={queue[currentIndex].audioUrl}
-              onPlay={() => {
-                setIsPlaying(true);
-                if ('mediaSession' in navigator) {
-                  navigator.mediaSession.playbackState = 'playing';
-                }
-              }}
-              onPause={() => {
-                setIsPlaying(false);
-                if ('mediaSession' in navigator) {
-                  navigator.mediaSession.playbackState = 'paused';
-                }
-              }}
-              preload="auto"
-              playsInline
-              crossOrigin="anonymous"
-              style={{ display: 'none' }}
-            />
           </div>
         )}
       </div>

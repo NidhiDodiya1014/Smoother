@@ -1,133 +1,37 @@
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import API_BASE_URL from "../config/api";
+import { useAudio } from "../contexts/AudioContext";
+import { useQueue } from "../contexts/QueueContext";
 
-function Home({ addToQueue, queue }) {
+function Home() {
+  const { addToQueue } = useQueue();
   const [songs, setSongs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [expandedSong, setExpandedSong] = useState(null);
   const [autoPlay, setAutoPlay] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(0.75);
   const [addedToQueueId, setAddedToQueueId] = useState(null);
-  const [playingSongId, setPlayingSongId] = useState(null);
-  const audioRef = useRef(null);
-  const cardAudioRefs = useRef({});
+  const { currentSong, isPlaying, currentTime, duration, audioRef, playSong, togglePlayPause, setCurrentTime } = useAudio();
 
   useEffect(() => {
     loadSongs();
   }, []);
 
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden && audioRef.current && isPlaying) {
-        audioRef.current.play().catch(err => {
-          console.error("Background play failed:", err);
-        });
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [isPlaying]);
+  const [volume, setVolume] = useState(0.75);
 
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = volume;
     }
-  }, [volume]);
+  }, [volume, audioRef]);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const updateTime = () => setCurrentTime(audio.currentTime);
-    const updateDuration = () => setDuration(audio.duration);
-    const handleEnded = () => {
-      setIsPlaying(false);
-      setCurrentTime(0);
-    };
-
-    audio.addEventListener('timeupdate', updateTime);
-    audio.addEventListener('loadedmetadata', updateDuration);
-    audio.addEventListener('ended', handleEnded);
-
-    return () => {
-      audio.removeEventListener('timeupdate', updateTime);
-      audio.removeEventListener('loadedmetadata', updateDuration);
-      audio.removeEventListener('ended', handleEnded);
-    };
-  }, [expandedSong]);
-
-  useEffect(() => {
-    if (expandedSong && autoPlay && audioRef.current) {
-      const playPromise = audioRef.current.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            setIsPlaying(true);
-            setAutoPlay(false);
-          })
-          .catch(error => {
-            console.error("Auto-play failed:", error);
-            setAutoPlay(false);
-          });
-      }
+    if (expandedSong && autoPlay) {
+      playSong(expandedSong, true);
+      setAutoPlay(false);
     }
-  }, [expandedSong, autoPlay]);
-
-  useEffect(() => {
-    if (expandedSong && 'mediaSession' in navigator) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: expandedSong.title,
-        artist: 'Smoother',
-      });
-
-      navigator.mediaSession.setActionHandler('play', () => {
-        if (audioRef.current) {
-          audioRef.current.play();
-          setIsPlaying(true);
-          navigator.mediaSession.playbackState = 'playing';
-        }
-      });
-
-      navigator.mediaSession.setActionHandler('pause', () => {
-        if (audioRef.current) {
-          audioRef.current.pause();
-          setIsPlaying(false);
-          navigator.mediaSession.playbackState = 'paused';
-        }
-      });
-
-      navigator.mediaSession.setActionHandler('previoustrack', () => {
-        if (audioRef.current) {
-          audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
-        }
-      });
-
-      navigator.mediaSession.setActionHandler('nexttrack', () => {
-        if (audioRef.current) {
-          audioRef.current.currentTime = Math.min(duration, audioRef.current.currentTime + 10);
-        }
-      });
-
-      if (audioRef.current) {
-        const updatePlaybackState = () => {
-          if (audioRef.current) {
-            navigator.mediaSession.playbackState = audioRef.current.paused ? 'paused' : 'playing';
-          }
-        };
-        audioRef.current.addEventListener('play', updatePlaybackState);
-        audioRef.current.addEventListener('pause', updatePlaybackState);
-        updatePlaybackState();
-      }
-    }
-  }, [expandedSong, duration, isPlaying]);
+  }, [expandedSong, autoPlay, playSong]);
 
   const loadSongs = async () => {
     try {
@@ -158,34 +62,8 @@ function Home({ addToQueue, queue }) {
     }
   };
 
-  const togglePlayPause = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-        if ('mediaSession' in navigator) {
-          navigator.mediaSession.playbackState = 'paused';
-        }
-      } else {
-        const playPromise = audioRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              setIsPlaying(true);
-              if ('mediaSession' in navigator) {
-                navigator.mediaSession.playbackState = 'playing';
-              }
-            })
-            .catch(error => {
-              console.error("Play failed:", error);
-            });
-        }
-      }
-    }
-  };
-
   const handleProgressClick = (e) => {
-    if (audioRef.current && duration) {
+    if (audioRef.current && duration && currentSong?._id === expandedSong?._id) {
       const rect = e.currentTarget.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const percentage = clickX / rect.width;
@@ -213,16 +91,15 @@ function Home({ addToQueue, queue }) {
   };
 
   if (expandedSong) {
+    const isExpandedSongPlaying = currentSong?._id === expandedSong._id && isPlaying;
+    const expandedCurrentTime = currentSong?._id === expandedSong._id ? currentTime : 0;
+    const expandedDuration = currentSong?._id === expandedSong._id ? duration : 0;
+
     return (
       <div className="page-container">
         <button className="back-button" onClick={() => {
           setExpandedSong(null);
           setAutoPlay(false);
-          setIsPlaying(false);
-          if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-          }
         }}>
           ← Back to all songs
         </button>
@@ -236,29 +113,35 @@ function Home({ addToQueue, queue }) {
               <div className="progress-bar-wrapper" onClick={handleProgressClick}>
                 <div 
                   className="progress-bar-fill" 
-                  style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
+                  style={{ width: `${expandedDuration ? (expandedCurrentTime / expandedDuration) * 100 : 0}%` }}
                 />
               </div>
               <div className="progress-time">
-                <span>{formatTime(currentTime)}</span>
-                <span>-{formatTime(duration - currentTime)}</span>
+                <span>{formatTime(expandedCurrentTime)}</span>
+                <span>-{formatTime(expandedDuration - expandedCurrentTime)}</span>
               </div>
             </div>
 
             <div className="controls-row">
               <button className="control-btn" onClick={() => {
-                if (audioRef.current) {
+                if (audioRef.current && currentSong?._id === expandedSong._id) {
                   audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
                 }
               }}>
                 ⏮
               </button>
-              <button className="play-pause-btn" onClick={togglePlayPause}>
-                {isPlaying ? '⏸' : '▶'}
+              <button className="play-pause-btn" onClick={() => {
+                if (currentSong?._id === expandedSong._id) {
+                  togglePlayPause();
+                } else {
+                  playSong(expandedSong, true);
+                }
+              }}>
+                {isExpandedSongPlaying ? '⏸' : '▶'}
               </button>
               <button className="control-btn" onClick={() => {
-                if (audioRef.current) {
-                  audioRef.current.currentTime = Math.min(duration, audioRef.current.currentTime + 10);
+                if (audioRef.current && currentSong?._id === expandedSong._id) {
+                  audioRef.current.currentTime = Math.min(expandedDuration, audioRef.current.currentTime + 10);
                 }
               }}>
                 ⏭
@@ -276,26 +159,6 @@ function Home({ addToQueue, queue }) {
               <span style={{ color: 'var(--text-secondary)' }}>🔊</span>
             </div>
 
-            <audio
-              ref={audioRef}
-              src={expandedSong.audioUrl}
-              onPlay={() => {
-                setIsPlaying(true);
-                if ('mediaSession' in navigator) {
-                  navigator.mediaSession.playbackState = 'playing';
-                }
-              }}
-              onPause={() => {
-                setIsPlaying(false);
-                if ('mediaSession' in navigator) {
-                  navigator.mediaSession.playbackState = 'paused';
-                }
-              }}
-              preload="auto"
-              playsInline
-              crossOrigin="anonymous"
-              style={{ display: 'none' }}
-            />
 
             <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
               <button
@@ -355,10 +218,7 @@ function Home({ addToQueue, queue }) {
       {!loading && songs.length > 0 && (
         <div className="song-grid">
           {songs.map(song => {
-            const isCardPlaying = playingSongId === song._id;
-            if (!cardAudioRefs.current[song._id]) {
-              cardAudioRefs.current[song._id] = { current: null };
-            }
+            const isCardPlaying = currentSong?._id === song._id && isPlaying;
 
             const handleCardClick = (e) => {
               if (e.target.closest('button') || e.target.closest('.added-message')) {
@@ -370,20 +230,10 @@ function Home({ addToQueue, queue }) {
 
             const handlePlayPause = (e) => {
               e.stopPropagation();
-              const audio = cardAudioRefs.current[song._id]?.current;
-              if (!audio) return;
-
               if (isCardPlaying) {
-                audio.pause();
-                setPlayingSongId(null);
+                togglePlayPause();
               } else {
-                Object.values(cardAudioRefs.current).forEach(ref => {
-                  if (ref?.current && ref.current !== audio) {
-                    ref.current.pause();
-                  }
-                });
-                audio.play();
-                setPlayingSongId(song._id);
+                playSong(song, true);
               }
             };
 
@@ -425,19 +275,6 @@ function Home({ addToQueue, queue }) {
                     ✓ Added to Queue
                   </div>
                 )}
-                <audio
-                  ref={(el) => {
-                    if (cardAudioRefs.current[song._id]) {
-                      cardAudioRefs.current[song._id].current = el;
-                    }
-                  }}
-                  src={song.audioUrl}
-                  onEnded={() => setPlayingSongId(null)}
-                  preload="auto"
-                  playsInline
-                  crossOrigin="anonymous"
-                  style={{ display: 'none' }}
-                />
               </div>
             );
           })}

@@ -257,6 +257,8 @@ body::before {
   box-shadow: 0 8px 25px rgba(255, 0, 255, 0.4);
   transition: all 0.3s ease;
   position: relative;
+  pointer-events: auto;
+  z-index: 10;
 }
 
 .play-pause-btn:hover {
@@ -281,6 +283,9 @@ body::before {
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
+  pointer-events: auto;
+  position: relative;
+  z-index: 10;
 }
 
 .control-btn:hover {
@@ -534,6 +539,13 @@ body::before {
   justify-content: space-between;
   align-items: center;
   transition: all 0.3s ease;
+  position: relative;
+}
+
+.queue-item button {
+  pointer-events: auto !important;
+  z-index: 100 !important;
+  position: relative !important;
 }
 
 .queue-item.active {
@@ -671,6 +683,16 @@ body::before {
   .song-card .btn-small {
     font-size: 13px !important;
     padding: 10px 16px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .global-player {
+    bottom: 10px !important;
+    right: 10px !important;
+    left: 10px !important;
+    max-width: none !important;
+    min-width: auto !important;
   }
 }
 
