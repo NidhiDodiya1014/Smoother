@@ -1,6 +1,5 @@
-FROM node:20-slim
+FROM node:22-slim
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
@@ -9,14 +8,11 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp
-RUN pip3 install --no-cache-dir yt-dlp
+RUN pip3 install --no-cache-dir yt-dlp --break-system-packages
 
-# Install Deno
 RUN curl -fsSL https://deno.land/install.sh | sh
 ENV PATH="/root/.deno/bin:${PATH}"
 
-# Verify installs
 RUN yt-dlp --version
 RUN ffmpeg -version | head -n 1
 RUN deno --version
