@@ -1,6 +1,6 @@
-FROM node:22-slim
+FROM node:20-slim
 
-# Install system deps
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
@@ -9,10 +9,10 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp (Python version is more stable than binary sometimes)
+# Install yt-dlp
 RUN pip3 install --no-cache-dir yt-dlp
 
-# Install Deno (for JS challenge solving)
+# Install Deno
 RUN curl -fsSL https://deno.land/install.sh | sh
 ENV PATH="/root/.deno/bin:${PATH}"
 
