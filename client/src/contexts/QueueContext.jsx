@@ -11,18 +11,33 @@ export const useQueue = () => {
 };
 
 export const QueueProvider = ({ children }) => {
-  const [queue, setQueue] = useState(() => {
-    const saved = localStorage.getItem('queue');
-    return saved ? JSON.parse(saved) : [];
-  });
+
+  /* ================= SAFE PARSE HELPERS ================= */
+
+  const safeParse = (value, fallback) => {
+    try {
+      return value ? JSON.parse(value) : fallback;
+    } catch {
+      return fallback;
+    }
+  };
+
+  /* ================= STATE ================= */
+
+  const [queue, setQueue] = useState(() =>
+    safeParse(localStorage.getItem('queue'), [])
+  );
+
   const [currentIndex, setCurrentIndex] = useState(() => {
     const saved = localStorage.getItem('queueIndex');
-    return saved !== null ? parseInt(saved) : null;
+    return saved !== null ? parseInt(saved, 10) : null;
   });
-  const [isLooping, setIsLooping] = useState(() => {
-    const saved = localStorage.getItem('isLooping');
-    return saved === 'true';
-  });
+
+  const [isLooping, setIsLooping] = useState(() =>
+    localStorage.getItem('isLooping') === 'true'
+  );
+
+  /* ================= LOCAL STORAGE ================= */
 
   useEffect(() => {
     localStorage.setItem('queue', JSON.stringify(queue));
@@ -40,6 +55,8 @@ export const QueueProvider = ({ children }) => {
     localStorage.setItem('isLooping', isLooping.toString());
   }, [isLooping]);
 
+  /* ================= QUEUE OPERATIONS ================= */
+
   const addToQueue = (song) => {
     setQueue(prev => {
       if (prev.find(s => s._id === song._id)) return prev;
@@ -48,22 +65,30 @@ export const QueueProvider = ({ children }) => {
   };
 
   const removeFromQueue = (id) => {
-    setQueue(prev => {
-      const newQueue = prev.filter(song => song._id !== id);
-      const removedIndex = prev.findIndex(s => s._id === id);
-      if (removedIndex !== -1 && currentIndex !== null) {
-        if (removedIndex < currentIndex) {
-          setCurrentIndex(currentIndex - 1);
-        } else if (removedIndex === currentIndex) {
-          if (newQueue.length > 0 && currentIndex < newQueue.length) {
-            setCurrentIndex(currentIndex);
-          } else if (currentIndex > 0) {
-            setCurrentIndex(currentIndex - 1);
-          } else {
-            setCurrentIndex(null);
-          }
+    setQueue(prevQueue => {
+      const removedIndex = prevQueue.findIndex(s => s._id === id);
+      const newQueue = prevQueue.filter(song => song._id !== id);
+
+      setCurrentIndex(prevIndex => {
+        if (prevIndex === null || removedIndex === -1) return prevIndex;
+
+        if (removedIndex < prevIndex) {
+          return prevIndex - 1;
         }
-      }
+
+        if (removedIndex === prevIndex) {
+          if (newQueue.length > 0 && prevIndex < newQueue.length) {
+            return prevIndex;
+          }
+          if (prevIndex > 0) {
+            return prevIndex - 1;
+          }
+          return null;
+        }
+
+        return prevIndex;
+      });
+
       return newQueue;
     });
   };
@@ -74,6 +99,8 @@ export const QueueProvider = ({ children }) => {
     localStorage.removeItem('queue');
     localStorage.removeItem('queueIndex');
   };
+
+  /* ================= CONTEXT VALUE ================= */
 
   const value = {
     queue,
@@ -93,4 +120,3 @@ export const QueueProvider = ({ children }) => {
     </QueueContext.Provider>
   );
 };
-

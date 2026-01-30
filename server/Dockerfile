@@ -1,23 +1,30 @@
 FROM node:22-slim
 
+# Install system deps
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
     ca-certificates \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp binary directly
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
-    -o /usr/local/bin/yt-dlp \
-    && chmod +x /usr/local/bin/yt-dlp
+# Install yt-dlp (Python version is more stable than binary sometimes)
+RUN pip3 install --no-cache-dir yt-dlp
 
-# Verify installations
-RUN yt-dlp --version && ffmpeg -version | head -n 1
+# Install Deno (for JS challenge solving)
+RUN curl -fsSL https://deno.land/install.sh | sh
+ENV PATH="/root/.deno/bin:${PATH}"
+
+# Verify installs
+RUN yt-dlp --version
+RUN ffmpeg -version | head -n 1
+RUN deno --version
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+RUN npm install --production
 
 COPY . .
 
