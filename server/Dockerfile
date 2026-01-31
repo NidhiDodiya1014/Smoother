@@ -6,16 +6,13 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     python3 \
     python3-pip \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install --no-cache-dir yt-dlp --break-system-packages
 
 RUN curl -fsSL https://deno.land/install.sh | sh
 ENV PATH="/root/.deno/bin:${PATH}"
-
-RUN yt-dlp --version
-RUN ffmpeg -version | head -n 1
-RUN deno --version
 
 WORKDIR /app
 
