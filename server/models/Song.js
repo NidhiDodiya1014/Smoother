@@ -1,14 +1,29 @@
 const mongoose = require("mongoose");
 
 const songSchema = new mongoose.Schema({
-  title: String,
-  youtubeUrl: String,
-  audioUrl: String,        
-  cloudinaryId: String,   
+
+  youtubeId: {
+    type: String,
+    required: true,
+    unique: true,
+    index: true
+  },
+
+  audioUrl: {
+    type: String,
+    required: true
+  },
+
+  cloudinaryId: {
+    type: String,
+    required: true
+  },
+
   createdAt: {
     type: Date,
     default: Date.now
   }
+
 });
 
 module.exports = mongoose.model("Song", songSchema);
