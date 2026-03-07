@@ -217,10 +217,37 @@ const deleteSong = async (req, res) => {
 
 };
 
+const updateSong = async (req, res) => {
+  try {
+    const { id, title } = req.body;
+    console.log(id,title)
+    if (!id || !title) {
+      return res.status(400).json({ error: "Song id and title are required" });
+    }
 
+    const song = await UserSong.findById(id);
+
+    if (!song) {
+      return res.status(404).json({ error: "Song not found" });
+    }
+
+    song.customTitle = title;
+    await song.save();
+
+    res.json({
+      message: "Song title updated successfully!",
+      song
+    });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: err.message });
+  }
+};
 
 module.exports = {
   addSong,
   getSongs,
-  deleteSong
+  deleteSong,
+  updateSong
 };
