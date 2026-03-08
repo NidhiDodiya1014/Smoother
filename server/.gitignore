@@ -1,2 +1,8 @@
 .env
 node_modules
+test-*.js
+test-ytdl
+yt-dlp
+yt-dlp.exe
+songs/
+.ffmpeg-bin/

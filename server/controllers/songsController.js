@@ -284,6 +284,10 @@ const deleteSong = async (req, res) => {
       return res.status(404).json({ error: "Song not found" });
     }
 
+    if (userSong.user.toString() !== req.userId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
     const songId = userSong.song;
 
     await UserSong.findByIdAndDelete(req.params.id);
@@ -344,6 +348,10 @@ const updateSong = async (req, res) => {
       return res.status(404).json({ error: "Song not found" });
     }
 
+    if (song.user.toString() !== req.userId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
     if (title !== undefined) song.customTitle = title;
     if (color !== undefined) song.color = color;
     
@@ -355,7 +363,7 @@ const updateSong = async (req, res) => {
     });
 
   } catch (err) {
-    console.log(err);
+    console.error("UPDATE SONG ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 };

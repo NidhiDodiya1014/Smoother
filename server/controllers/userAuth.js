@@ -34,7 +34,7 @@ const register = async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
+        console.error("REGISTER ERROR:", error);
         res.status(500).json({ message: error.message });
     }
 };
@@ -63,7 +63,7 @@ const login = async (req, res) => {
         });
 
     } catch (e) {
-        console.log(e);
+        console.error("LOGIN ERROR:", e);
         res.status(500).json({ message: e.message })
     }
 }
