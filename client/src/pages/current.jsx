@@ -24,8 +24,6 @@ function Current() {
     clearQueue
   } = useQueue();
 
-  /* ================= PLAY NEXT ================= */
-
   const playNext = useCallback(() => {
     if (currentIndex !== null && currentIndex + 1 < queue.length) {
       setCurrentIndex(currentIndex + 1);
@@ -36,28 +34,29 @@ function Current() {
     }
   }, [currentIndex, queue.length, isLooping, setCurrentIndex]);
 
-  /* ================= SYNC INDEX → AUDIO ================= */
-
   useEffect(() => {
     if (
       currentIndex !== null &&
       queue[currentIndex] &&
-      queue[currentIndex]._id !== currentSong?._id
+      queue[currentIndex].id !== currentSong?.id
     ) {
       playSong(queue[currentIndex], true);
     }
   }, [currentIndex, queue, playSong, currentSong]);
 
-  /* ================= ACTIONS ================= */
-
   const playQueue = () => {
     if (!queue.length) return;
-    setCurrentIndex(0);
+
+    if (currentIndex !== null && currentSong?.id === queue[currentIndex]?.id) {
+      togglePlayPause();
+    } else {
+      setCurrentIndex(0);
+    }
   };
 
   const handleProgressClick = (e) => {
     if (!audioRef.current || !duration || currentIndex === null) return;
-    if (queue[currentIndex]?._id !== currentSong?._id) return;
+    if (queue[currentIndex]?.id !== currentSong?.id) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
@@ -77,61 +76,43 @@ function Current() {
 
   const isQueueSongPlaying =
     currentIndex !== null &&
-    queue[currentIndex]?._id === currentSong?._id;
-
-  /* ================= UI ================= */
+    queue[currentIndex]?.id === currentSong?.id;
 
   return (
-    <div
-      className="glass-card"
-      style={{ margin: "24px", maxWidth: "600px", marginLeft: "auto", marginRight: "auto" }}
-    >
-      <div style={{ padding: "32px" }}>
-        <h2
-          style={{
-            fontSize: "28px",
-            fontWeight: "700",
-            marginBottom: "24px",
-            background: "linear-gradient(135deg, var(--accent-magenta), var(--accent-blue))",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text"
-          }}
-        >
-          🎶 Current Queue
+    <div className="page-container" style={{ display: "flex", justifyContent: "center" }}>
+      <div className="glass-card" style={{ padding: "40px", maxWidth: "640px", width: "100%" }}>
+        <h2 className="page-title text-gradient" style={{ textAlign: "left", fontSize: "2rem", marginBottom: "32px" }}>
+          My Queue
         </h2>
 
-        {/* EMPTY STATE */}
         {queue.length === 0 && (
           <div className="empty-state">
             <p>No songs selected</p>
           </div>
         )}
 
-        {/* QUEUE LIST */}
         {queue.length > 0 && (
           <div style={{ marginBottom: "24px" }}>
             {queue.map((song, index) => {
-              const isThisSongCurrent = currentSong?._id === song._id;
+
+              const isThisSongCurrent = currentSong?.id === song.id;
               const isThisSongPlaying = isThisSongCurrent && isPlaying;
 
               return (
                 <div
-                  key={song._id}
+                  key={index}
                   className={`queue-item ${currentIndex === index ? "active" : ""}`}
-                  style={{ display: "flex", alignItems: "center", gap: "12px" }}
+                  style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: "12px",
+                    backgroundColor: song.color && song.color !== "#15151a" ? song.color : "" 
+                  }}
                 >
+
                   <button
                     className="control-btn"
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      fontSize: "14px",
-                      flexShrink: 0,
-                      cursor: "pointer",
-                      position: "relative",
-                      zIndex: 10
-                    }}
+                    style={{ width: "32px", height: "32px", fontSize: "14px" }}
                     onClick={(e) => {
                       e.stopPropagation();
                       if (isThisSongCurrent) togglePlayPause();
@@ -141,44 +122,30 @@ function Current() {
                     {isThisSongPlaying ? "⏸" : "▶"}
                   </button>
 
-                  <span
-                    style={{
-                      flex: 1,
-                      color:
-                        currentIndex === index
-                          ? "var(--accent-magenta)"
-                          : "var(--text-primary)"
-                    }}
-                  >
+                  <span style={{ flex: 1 }}>
                     {song.title}
                   </span>
 
                   <button
                     className="control-btn"
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      fontSize: "16px",
-                      marginLeft: "12px"
-                    }}
-                    onClick={() => removeFromQueue(song._id)}
+                    onClick={() => removeFromQueue(index)}
                   >
                     ✕
                   </button>
+
                 </div>
               );
             })}
           </div>
         )}
 
-        {/* QUEUE CONTROLS */}
         <div style={{ display: "flex", gap: "12px", marginBottom: "24px", flexWrap: "wrap" }}>
           <button className="btn-neon" onClick={playQueue} disabled={!queue.length}>
-            ▶ Play Queue
+            {isQueueSongPlaying && isPlaying ? "⏸ Pause Queue" : "▶ Play Queue"}
           </button>
 
           <button
-            className={isLooping ? "btn-neon btn-neon-blue" : "btn-outline-neon"}
+            className={isLooping ? "btn-neon" : "btn-outline-neon"}
             onClick={() => setIsLooping(!isLooping)}
             disabled={!queue.length}
           >
@@ -190,20 +157,11 @@ function Current() {
           </button>
         </div>
 
-        {/* PLAYER */}
         {isQueueSongPlaying && (
           <div>
-            <div style={{ marginBottom: "16px" }}>
-              <div
-                style={{
-                  fontSize: "18px",
-                  fontWeight: "600",
-                  marginBottom: "8px",
-                  color: "var(--text-primary)"
-                }}
-              >
-                Now Playing: {queue[currentIndex].title}
-              </div>
+
+            <div style={{ marginBottom: "16px", fontWeight: "600" }}>
+              Now Playing: {queue[currentIndex].title}
             </div>
 
             <div className="progress-container">
@@ -222,48 +180,9 @@ function Current() {
               </div>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "center", gap: "16px", marginTop: "20px" }}>
-              <button
-                className="control-btn"
-                onClick={() => {
-                  if (audioRef.current) {
-                    audioRef.current.currentTime = Math.max(
-                      0,
-                      audioRef.current.currentTime - 10
-                    );
-                  }
-                }}
-              >
-                ⏮
-              </button>
-
-              <button
-                className="play-pause-btn"
-                style={{ cursor: "pointer", position: "relative", zIndex: 100 }}
-                onClick={() => {
-                  if (!isQueueSongPlaying) return;
-                  togglePlayPause();
-                }}
-              >
-                {isPlaying ? "⏸" : "▶"}
-              </button>
-
-              <button
-                className="control-btn"
-                onClick={() => {
-                  if (audioRef.current) {
-                    audioRef.current.currentTime = Math.min(
-                      duration,
-                      audioRef.current.currentTime + 10
-                    );
-                  }
-                }}
-              >
-                ⏭
-              </button>
-            </div>
           </div>
         )}
+
       </div>
     </div>
   );

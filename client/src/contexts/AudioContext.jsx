@@ -10,7 +10,7 @@ export const useAudio = () => {
 };
 
 export const AudioProvider = ({ children }) => {
-  const { queue, currentIndex, setCurrentIndex, isLooping } = useQueue();
+  const { queue, currentIndex, setCurrentIndex, isLooping, setQueue } = useQueue();
 
   const [currentSong, setCurrentSong] = useState(() => {
     const saved = localStorage.getItem("currentSong");
@@ -21,16 +21,13 @@ export const AudioProvider = ({ children }) => {
     () => localStorage.getItem("isPlaying") === "true"
   );
 
-  const [currentTime, setCurrentTime] = useState(() =>
-    parseFloat(localStorage.getItem("currentTime") || "0")
+  const [currentTime, setCurrentTime] = useState(
+    () => parseFloat(localStorage.getItem("currentTime") || "0")
   );
 
   const [duration, setDuration] = useState(0);
 
   const audioRef = useRef(null);
-  const shouldAutoPlayRef = useRef(false);
-
-  /* ================= LOCAL STORAGE ================= */
 
   useEffect(() => {
     if (currentSong)
@@ -46,18 +43,56 @@ export const AudioProvider = ({ children }) => {
     localStorage.setItem("currentTime", currentTime.toString());
   }, [currentTime]);
 
-  /* ================= AUDIO EVENTS ================= */
+  useEffect(() => {
+    if (currentIndex !== null && queue[currentIndex]) {
+      setCurrentSong(queue[currentIndex]);
+      setIsPlaying(true);
+    }
+  }, [currentIndex, queue]);
+
+  const hasLoadedInitially = useRef(false);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
     const updateTime = () => setCurrentTime(audio.currentTime);
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+
+    const handleLoaded = () => {
+      setDuration(audio.duration || 0);
+
+      if (!hasLoadedInitially.current) {
+        const savedTime = parseFloat(localStorage.getItem("currentTime") || "0");
+        if (savedTime > 0 && savedTime < audio.duration) {
+          audio.currentTime = savedTime;
+        }
+        hasLoadedInitially.current = true;
+      }
+
+      if (isPlaying) {
+        audio.play().catch(() => {});
+      }
+    };
 
     const handleEnded = () => {
       if (currentIndex !== null && queue[currentIndex]) {
+        const current = queue[currentIndex];
+
+        if (current.played + 1 < current.repeat) {
+          setQueue(prev => {
+            const updated = [...prev];
+            updated[currentIndex] = {
+              ...updated[currentIndex],
+              played: updated[currentIndex].played + 1
+            };
+            return updated;
+          });
+
+          audioRef.current.currentTime = 0;
+          audioRef.current.play();
+          return;
+        }
+
         if (currentIndex + 1 < queue.length) {
           setCurrentIndex(currentIndex + 1);
         } else if (isLooping && queue.length > 0) {
@@ -67,90 +102,70 @@ export const AudioProvider = ({ children }) => {
           setCurrentSong(null);
           setIsPlaying(false);
         }
-      } else {
-        setCurrentSong(null);
-        setIsPlaying(false);
-      }
-      setCurrentTime(0);
-    };
-
-    const handleLoadedMetadata = () => {
-      setDuration(audio.duration);
-
-      const savedTime = parseFloat(localStorage.getItem("currentTime") || "0");
-      if (savedTime > 0 && savedTime < audio.duration) {
-        audio.currentTime = savedTime;
-      }
-
-      if (shouldAutoPlayRef.current) {
-        audio.play().catch(() => {});
-        shouldAutoPlayRef.current = false;
       }
     };
 
     audio.addEventListener("timeupdate", updateTime);
-    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audio.addEventListener("loadedmetadata", handleLoaded);
     audio.addEventListener("ended", handleEnded);
-    audio.addEventListener("play", handlePlay);
-    audio.addEventListener("pause", handlePause);
 
     return () => {
       audio.removeEventListener("timeupdate", updateTime);
-      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("loadedmetadata", handleLoaded);
       audio.removeEventListener("ended", handleEnded);
-      audio.removeEventListener("play", handlePlay);
-      audio.removeEventListener("pause", handlePause);
     };
-  }, [queue, currentIndex, isLooping]);
+  }, [queue, currentIndex, isLooping, isPlaying, setCurrentIndex, setQueue]);
 
-  /* ================= MEDIA SESSION ================= */
+  const currentSongRef = useRef(null);
 
   useEffect(() => {
-    if (!currentSong || !("mediaSession" in navigator)) return;
+    const audio = audioRef.current;
+    if (!audio || !currentSong) return;
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: currentSong.title,
-      artist: "Smoother",
-    });
+    if (currentSongRef.current !== currentSong.id) {
+      audio.src = currentSong.audioUrl;
+      audio.load();
+      currentSongRef.current = currentSong.id;
+    }
 
-    navigator.mediaSession.setActionHandler("play", () =>
-      audioRef.current?.play()
-    );
-
-    navigator.mediaSession.setActionHandler("pause", () =>
-      audioRef.current?.pause()
-    );
-  }, [currentSong]);
-
-  /* ================= FUNCTIONS ================= */
+    if (isPlaying) {
+      audio.play().catch(() => {});
+    } else {
+      audio.pause();
+    }
+  }, [currentSong, isPlaying]);
 
   const playSong = (song, autoPlay = false) => {
     setCurrentSong(song);
-    shouldAutoPlayRef.current = autoPlay;
+    setIsPlaying(autoPlay);
   };
 
   const togglePlayPause = () => {
     const audio = audioRef.current;
-    if (!audio || !currentSong) return;
+    if (!audio) return;
 
-    if (!audio.paused) audio.pause();
-    else audio.play().catch(() => {});
+    if (audio.paused) {
+      audio.play().catch(() => {});
+      setIsPlaying(true);
+    } else {
+      audio.pause();
+      setIsPlaying(false);
+    }
   };
 
   const stopSong = (clearQueueIndex = null) => {
     const audio = audioRef.current;
+
     if (audio) {
       audio.pause();
       audio.currentTime = 0;
     }
 
-    setIsPlaying(false);
     setCurrentSong(null);
+    setIsPlaying(false);
     setCurrentTime(0);
 
     localStorage.removeItem("currentSong");
-    localStorage.setItem("isPlaying", "false");
-    localStorage.setItem("currentTime", "0");
 
     if (clearQueueIndex) clearQueueIndex();
   };
@@ -166,20 +181,11 @@ export const AudioProvider = ({ children }) => {
         playSong,
         togglePlayPause,
         stopSong,
-        setCurrentTime,
+        setCurrentTime
       }}
     >
       {children}
-
-      {/* ⭐ AUDIO ALWAYS MOUNTED */}
-      <audio
-        ref={audioRef}
-        src={currentSong?.audioUrl || ""}
-        preload="auto"
-        playsInline
-        crossOrigin="anonymous"
-        style={{ display: "none" }}
-      />
+      <audio ref={audioRef} preload="auto" style={{ display: "none" }} />
     </AudioContext.Provider>
   );
 };

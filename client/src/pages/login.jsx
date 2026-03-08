@@ -1,0 +1,67 @@
+import { useState } from "react";
+import API from "../config/api";
+import { useNavigate } from "react-router-dom";
+
+export default function Login() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const navigate = useNavigate();
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+
+    try {
+      const res = await API.post("/user/login", {
+        email,
+        password
+      });
+
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("userName", res.data.user.name);
+
+      navigate("/");
+    } catch (err) {
+      setError("Invalid email or password");
+    }
+  };
+
+  return (
+    <div className="page-container" style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "80vh" }}>
+      <div className="glass-card" style={{ padding: "40px", maxWidth: "440px", margin: "0 auto", width: "100%" }}>
+        <h1 className="page-title text-gradient">Welcome Back</h1>
+        
+        <form onSubmit={handleLogin}>
+          <div style={{ marginBottom: "24px" }}>
+            <label style={{ display: "block", marginBottom: "8px", color: "var(--text-secondary)", fontSize: "0.9rem" }}>Email address</label>
+            <input
+              type="email"
+              placeholder="example@gmail.com"
+              className="input-neon"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
+          <div style={{ marginBottom: "24px" }}>
+            <label style={{ display: "block", marginBottom: "8px", color: "var(--text-secondary)", fontSize: "0.9rem" }}>Password</label>
+            <input
+              type="password"
+              placeholder="••••••••••••"
+              className="input-neon"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+
+          {error && <p style={{ color: "#ef4444", marginBottom: "20px", fontSize: "0.9rem" }}>{error}</p>}
+
+          <button className="btn-neon" type="submit" style={{ width: "100%", marginTop: "8px" }}>
+            Login
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}

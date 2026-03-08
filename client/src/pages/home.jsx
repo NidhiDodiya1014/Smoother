@@ -1,24 +1,62 @@
-import { useEffect, useState, useRef } from "react";
-import axios from "axios";
-import API_BASE_URL from "../config/api";
+import { useEffect, useState } from "react";
+import API from "../config/api";
 import { useAudio } from "../contexts/AudioContext";
 import { useQueue } from "../contexts/QueueContext";
+import { useLocation } from "react-router-dom";
 
 function Home() {
+  const location = useLocation();
   const { addToQueue } = useQueue();
+
   const [songs, setSongs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [expandedSong, setExpandedSong] = useState(null);
   const [autoPlay, setAutoPlay] = useState(false);
-  const [addedToQueueId, setAddedToQueueId] = useState(null);
-  const { currentSong, isPlaying, currentTime, duration, audioRef, playSong, togglePlayPause, setCurrentTime } = useAudio();
+  const [addedToQueueIds, setAddedToQueueIds] = useState([]);
+  const [buttonGreenQueueIds, setButtonGreenQueueIds] = useState([]);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [pickingColorFor, setPickingColorFor] = useState(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkColorPicking, setBulkColorPicking] = useState(false);
+
+  const PALETTE_GRID = [
+    ["#de677c", "#9463ae", "#4d7acd", "#2cb8e9", "#4ef4f5", "#a6fed5", "#fedbaa", "#d85b7e"],
+    ["#fc7575", "#df56c8", "#b952c4", "#8b18a2", "#ec13b0", "#8e16cc", "#fea2f0", "#d1f6ff"],
+    ["#708cfd", "#11ccfa", "#3fead7", "#c4e6db", "#ebc1ef", "#e38cfe", "#cc72fd", "#ae5cfc"],
+    ["#061350", "#0c3b88", "#0b7190", "#10a56e", "#35d487", "#c1cbab", "#87abdf", "#0cf1f5"],
+    ["#c9d0ff", "#aeb8fc", "#f0d5fd", "#d7beff", "#affcf5", "#92d5ef", "#ffadcf", "#cd8cfe"]
+  ];
+
+  const {
+    currentSong,
+    isPlaying,
+    currentTime,
+    duration,
+    audioRef,
+    playSong,
+    togglePlayPause,
+    setCurrentTime
+  } = useAudio();
+
+  const [volume, setVolume] = useState(0.75);
 
   useEffect(() => {
     loadSongs();
-  }, []);
 
-  const [volume, setVolume] = useState(0.75);
+    const handleReset = () => {
+      setExpandedSong(null);
+      setAutoPlay(false);
+      setPickingColorFor(null);
+      setConfirmingDelete(null);
+    };
+    
+    window.addEventListener("resetHome", handleReset);
+    return () => window.removeEventListener("resetHome", handleReset);
+  }, []);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -33,9 +71,16 @@ function Home() {
     }
   }, [expandedSong, autoPlay, playSong]);
 
+  useEffect(() => {
+    if (location.state?.openSong) {
+      setExpandedSong(location.state.openSong);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
   const loadSongs = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/songs`);
+      const res = await API.get("/songs");
       setSongs(res.data);
     } catch (err) {
       console.error("Failed to load songs", err);
@@ -45,16 +90,17 @@ function Home() {
   };
 
   const deleteSong = async (id) => {
-    if (!window.confirm("Delete this song?")) return;
-
     try {
       setProcessing(true);
-      await axios.delete(`${API_BASE_URL}/songs/${id}`);
-      setSongs(prev => prev.filter(song => song._id !== id));
-      if (expandedSong?._id === id) {
+
+      await API.delete(`/songs/${id}`);
+
+      setSongs((prev) => prev.filter((song) => song.id !== id));
+
+      if (expandedSong?.id === id) {
         setExpandedSong(null);
-        setIsPlaying(false);
       }
+
     } catch (err) {
       console.error("Delete failed", err);
     } finally {
@@ -62,12 +108,72 @@ function Home() {
     }
   };
 
+  const updateTitle = async () => {
+    if (!newTitle.trim()) return;
+
+    try {
+      setProcessing(true);
+
+      const songId = expandedSong.id;
+
+      await API.post("/updateSong", {
+        id: songId,
+        title: newTitle
+      });
+
+      setExpandedSong((prev) => ({
+        ...prev,
+        title: newTitle
+      }));
+
+      setSongs((prev) =>
+        prev.map((song) =>
+          song.id === songId ? { ...song, title: newTitle } : song
+        )
+      );
+
+      setEditingTitle(false);
+
+    } catch (err) {
+      console.error("Update failed", err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const updateColor = async (color) => {
+    try {
+      const songId = pickingColorFor;
+
+      await API.post("/updateSong", {
+        id: songId,
+        color: color
+      });
+
+      setExpandedSong((prev) => ({
+        ...prev,
+        color: color
+      }));
+
+      setSongs((prev) =>
+        prev.map((song) =>
+          song.id === songId ? { ...song, color: color } : song
+        )
+      );
+
+      setPickingColorFor(null);
+    } catch (err) {
+      console.error("Color update failed", err);
+    }
+  };
+
   const handleProgressClick = (e) => {
-    if (audioRef.current && duration && currentSong?._id === expandedSong?._id) {
+    if (audioRef.current && duration && currentSong?.id === expandedSong?.id) {
       const rect = e.currentTarget.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const percentage = clickX / rect.width;
       const newTime = percentage * duration;
+
       audioRef.current.currentTime = newTime;
       setCurrentTime(newTime);
     }
@@ -78,6 +184,7 @@ function Home() {
       const rect = e.currentTarget.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const percentage = Math.max(0, Math.min(1, clickX / rect.width));
+
       setVolume(percentage);
       audioRef.current.volume = percentage;
     }
@@ -85,114 +192,275 @@ function Home() {
 
   const formatTime = (seconds) => {
     if (!seconds || isNaN(seconds)) return "0:00";
+
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const showAddedMessage = (id) => {
+    setAddedToQueueIds((prev) => [...prev, id]);
+    setButtonGreenQueueIds((prev) => [...prev, id]);
+
+    setTimeout(() => {
+      setAddedToQueueIds((prev) => prev.filter((item) => item !== id));
+    }, 2000);
+
+    setTimeout(() => {
+      setButtonGreenQueueIds((prev) => prev.filter((item) => item !== id));
+    }, 60000);
   };
 
   if (expandedSong) {
-    const isExpandedSongPlaying = currentSong?._id === expandedSong._id && isPlaying;
-    const expandedCurrentTime = currentSong?._id === expandedSong._id ? currentTime : 0;
-    const expandedDuration = currentSong?._id === expandedSong._id ? duration : 0;
+    const isExpandedSongPlaying =
+      currentSong?.id === expandedSong.id && isPlaying;
+
+    const expandedCurrentTime =
+      currentSong?.id === expandedSong.id ? currentTime : 0;
+
+    const expandedDuration =
+      currentSong?.id === expandedSong.id ? duration : 0;
 
     return (
       <div className="page-container">
-        <button className="back-button" onClick={() => {
-          setExpandedSong(null);
-          setAutoPlay(false);
-        }}>
-          ← Back to all songs
+        <button
+          className="back-button"
+          onClick={() => {
+            setExpandedSong(null);
+            setAutoPlay(false);
+            setConfirmingDelete(null);
+          }}
+        >
+          <span style={{ fontSize: "1.2rem", fontWeight: "bold" }}>←</span> Back to all songs
         </button>
 
-        <div className="media-player-card">
-          <div className="media-player-content">
-            <div className="song-title-large">{expandedSong.title}</div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '24px' }}>iPhone</div>
-
-            <div className="progress-container">
-              <div className="progress-bar-wrapper" onClick={handleProgressClick}>
-                <div 
-                  className="progress-bar-fill" 
-                  style={{ width: `${expandedDuration ? (expandedCurrentTime / expandedDuration) * 100 : 0}%` }}
-                />
+        <div 
+          className="media-player-card"
+          style={{
+            position: "relative",
+            overflow: "hidden",
+            background: expandedSong.color && expandedSong.color !== "#15151a" 
+              ? `linear-gradient(135deg, ${expandedSong.color.substring(0, 7)}33 0%, rgba(20, 20, 25, 0.6) 100%)` 
+              : undefined,
+            borderTopColor: expandedSong.color && expandedSong.color !== "#15151a" 
+              ? `${expandedSong.color.substring(0, 7)}66`
+              : "rgba(255, 255, 255, 0.08)"
+          }}
+        >
+          {confirmingDelete === expandedSong.id && (
+            <div style={{
+              position: "absolute",
+              top: 0, left: 0, right: 0, bottom: 0,
+              background: "rgba(15, 15, 20, 0.85)",
+              backdropFilter: "blur(8px)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "16px",
+              zIndex: 10,
+              borderRadius: "24px"
+            }}>
+              <div style={{ fontSize: "2rem", marginBottom: "-8px" }}>🥺</div>
+              <div style={{ fontSize: "1.2rem", fontWeight: "600", color: "#fff", textAlign: "center", padding: "0 20px" }}>
+                Are you sure you want to delete this?
               </div>
-              <div className="progress-time">
-                <span>{formatTime(expandedCurrentTime)}</span>
-                <span>-{formatTime(expandedDuration - expandedCurrentTime)}</span>
+              <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+                <button
+                  className="btn-danger"
+                  style={{ padding: "8px 24px", borderRadius: "100px", fontWeight: "600" }}
+                  disabled={processing}
+                  onClick={() => deleteSong(expandedSong.id)}
+                >
+                  {processing ? "Deleting..." : "Yes, delete"}
+                </button>
+                <button
+                  className="btn-outline-neon"
+                  style={{ padding: "8px 24px", borderRadius: "100px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff" }}
+                  disabled={processing}
+                  onClick={() => setConfirmingDelete(null)}
+                >
+                  No, keep it
+                </button>
               </div>
             </div>
+          )}
 
-            <div className="controls-row">
-              <button className="control-btn" onClick={() => {
-                if (audioRef.current && currentSong?._id === expandedSong._id) {
-                  audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
+          <div style={{ textAlign: "center" }}>
+            {editingTitle ? (
+              <input
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                className="input-neon"
+                style={{ textAlign: "center", marginBottom: "32px", fontSize: "1.25rem", fontWeight: "600" }}
+              />
+            ) : (
+              <div className="song-title-large" style={{ marginBottom: "32px" }}>
+                {expandedSong.title}
+              </div>
+            )}
+          </div>
+
+          <div className="progress-container">
+            <div className="progress-bar-wrapper" onClick={handleProgressClick}>
+              <div
+                className="progress-bar-fill"
+                style={{
+                  width: expandedDuration
+                    ? `${(expandedCurrentTime / expandedDuration) * 100}%`
+                    : "0%"
+                }}
+              />
+            </div>
+
+            <div className="progress-time">
+              <span>{formatTime(expandedCurrentTime)}</span>
+              <span>-{formatTime(expandedDuration - expandedCurrentTime)}</span>
+            </div>
+          </div>
+
+          <div className="controls-row">
+            <button
+              className="control-btn"
+              onClick={() => {
+                if (audioRef.current && currentSong?.id === expandedSong.id) {
+                  audioRef.current.currentTime =
+                    Math.max(0, audioRef.current.currentTime - 10);
                 }
-              }}>
-                ⏮
-              </button>
-              <button className="play-pause-btn" onClick={() => {
-                if (currentSong?._id === expandedSong._id) {
+              }}
+            >
+              ⏮
+            </button>
+
+            <button
+              className="play-pause-btn"
+              onClick={() => {
+                if (isExpandedSongPlaying) {
                   togglePlayPause();
                 } else {
                   playSong(expandedSong, true);
                 }
-              }}>
-                {isExpandedSongPlaying ? '⏸' : '▶'}
-              </button>
-              <button className="control-btn" onClick={() => {
-                if (audioRef.current && currentSong?._id === expandedSong._id) {
-                  audioRef.current.currentTime = Math.min(expandedDuration, audioRef.current.currentTime + 10);
+              }}
+            >
+              {isExpandedSongPlaying ? "⏸" : "▶"}
+            </button>
+
+            <button
+              className="control-btn"
+              onClick={() => {
+                if (audioRef.current && currentSong?.id === expandedSong.id) {
+                  audioRef.current.currentTime =
+                    Math.min(expandedDuration, audioRef.current.currentTime + 10);
                 }
-              }}>
-                ⏭
-              </button>
+              }}
+            >
+              ⏭
+            </button>
+          </div>
+
+          <div className="volume-control">
+            <span style={{ color: "var(--text-secondary)", fontSize: "1.2rem" }}>🔉</span>
+            <div className="volume-slider" onClick={handleVolumeClick}>
+              <div
+                className="volume-slider-fill"
+                style={{ width: `${volume * 100}%` }}
+              />
             </div>
+            <span style={{ color: "var(--text-secondary)", fontSize: "1.2rem" }}>🔊</span>
+          </div>
 
-            <div className="volume-control">
-              <span style={{ color: 'var(--text-secondary)' }}>🔉</span>
-              <div className="volume-slider" onClick={handleVolumeClick}>
-                <div 
-                  className="volume-slider-fill" 
-                  style={{ width: `${volume * 100}%` }}
-                />
-              </div>
-              <span style={{ color: 'var(--text-secondary)' }}>🔊</span>
-            </div>
-
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '32px' }}>
+          <div style={{ display: "flex", gap: "12px", marginTop: "40px", justifyContent: "center" }}>
               <button
                 className="btn-small btn-danger"
                 disabled={processing}
-                onClick={() => deleteSong(expandedSong._id)}
+                onClick={() => setConfirmingDelete(expandedSong.id)}
               >
-                {processing ? "Deleting..." : "Delete"}
+                Delete
               </button>
 
+              <a
+                href={expandedSong.audioUrl ? expandedSong.audioUrl.replace('/upload/', '/upload/fl_attachment/') : '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-small btn-outline-neon"
+                style={{ color: "var(--accent-cyan)", borderColor: "var(--accent-cyan)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                Download
+              </a>
+
+            {!editingTitle ? (
               <button
-                className="btn-small btn-success"
+                className="btn-small btn-outline-neon"
+                style={{ color: "#facc15", borderColor: "#facc15" }}
                 onClick={() => {
-                  addToQueue(expandedSong);
-                  setAddedToQueueId(expandedSong._id);
-                  setTimeout(() => setAddedToQueueId(null), 2000);
+                  setEditingTitle(true);
+                  setNewTitle(expandedSong.title);
                 }}
               >
-                Add to Queue
+                Edit Title
               </button>
-              {addedToQueueId === expandedSong._id && (
-                <div style={{
-                  color: '#00ff66',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  marginTop: '12px',
-                  textAlign: 'center',
-                  animation: 'fadeIn 0.3s ease-in'
-                }}>
-                  ✓ Added to Queue
-                </div>
-              )}
-            </div>
+            ) : (
+              <button
+                className="btn-small btn-primary"
+                onClick={updateTitle}
+              >
+                Save
+              </button>
+            )}
+
+            <button
+              className="btn-small btn-outline-neon"
+              style={{ color: "var(--accent-cyan)", borderColor: "var(--accent-cyan)" }}
+              onClick={() => setPickingColorFor(pickingColorFor === expandedSong.id ? null : expandedSong.id)}
+            >
+              Color
+            </button>
+
+            <button
+              className="btn-small"
+              style={buttonGreenQueueIds.includes(expandedSong.id) ? { background: "#10b981", color: "white", border: "1px solid #10b981" } : { background: "transparent", color: "var(--text-primary)", border: "1px solid rgba(255, 255, 255, 0.3)" }}
+              onClick={() => {
+                addToQueue(expandedSong);
+                showAddedMessage(expandedSong.id);
+              }}
+            >
+              {buttonGreenQueueIds.includes(expandedSong.id) ? "✓ Added" : "+ Queue"}
+            </button>
           </div>
+
+          {pickingColorFor === expandedSong.id && (
+            <div className="color-palette-container" style={{ flexDirection: "column", alignItems: "center", gap: "6px" }}>
+              <div style={{ marginBottom: "12px", fontSize: "0.9rem", color: "var(--text-secondary)", fontWeight: "500" }}>Select a custom shade:</div>
+              <div className="color-grid">
+                {PALETTE_GRID.map((row, rowIndex) => (
+                  <div key={rowIndex} className="color-row" style={{ display: "flex", gap: "6px" }}>
+                    {row.map((colorHex, colIndex) => {
+                      const maskColor = colorHex + "2E";
+                      return (
+                        <div
+                          key={colIndex}
+                          className="color-swatch-small"
+                          style={{
+                            background: maskColor,
+                            border: expandedSong.color === maskColor ? "2px solid #fff" : "1px solid rgba(255,255,255,0.05)"
+                          }}
+                          onClick={() => updateColor(maskColor)}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+              <button
+                className="btn-small"
+                style={{ marginTop: "16px", background: "transparent", border: "1px solid rgba(255, 255, 255, 0.2)", color: "var(--text-secondary)" }}
+                onClick={() => updateColor("#15151a")}
+              >
+                Reset to Default
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -200,36 +468,110 @@ function Home() {
 
   return (
     <div className="page-container">
-      <h1 className="page-title">My Songs</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "8px" }}>
+        <h1 className="page-title text-gradient" style={{ margin: 0 }}>My Songs</h1>
+        {songs.length > 0 && (
+          <button
+            className="btn-small btn-outline-neon"
+            onClick={() => {
+              setSelectMode(v => !v);
+              setSelectedIds([]);
+              setBulkColorPicking(false);
+            }}
+            style={{ color: selectMode ? "#ef4444" : "var(--text-secondary)", borderColor: selectMode ? "#ef4444" : "rgba(255,255,255,0.2)" }}
+          >
+            {selectMode ? "✕ Cancel" : "☑ Select"}
+          </button>
+        )}
+      </div>
+
+      {selectMode && selectedIds.length > 0 && (
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: "12px",
+          padding: "12px 20px",
+          marginBottom: "24px",
+          flexWrap: "wrap"
+        }}>
+          <span style={{ color: "var(--text-secondary)", fontSize: "0.9rem", flexGrow: 1 }}>{selectedIds.length} song{selectedIds.length > 1 ? 's' : ''} selected</span>
+          <button
+            className="btn-small"
+            style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444" }}
+            disabled={processing}
+            onClick={bulkDelete}
+          >
+            {processing ? "Deleting..." : "🗑 Delete All"}
+          </button>
+          <button
+            className="btn-small btn-outline-neon"
+            style={{ color: "var(--accent-cyan)", borderColor: "var(--accent-cyan)" }}
+            onClick={() => setBulkColorPicking(v => !v)}
+          >
+            🎨 Change Color
+          </button>
+        </div>
+      )}
+
+      {bulkColorPicking && (
+        <div className="glass-card" style={{ padding: "24px", marginBottom: "24px" }}>
+          <div style={{ color: "var(--text-secondary)", fontSize: "0.9rem", marginBottom: "12px" }}>Pick a color for all {selectedIds.length} selected songs:</div>
+          {PALETTE_GRID.map((row, rowIndex) => (
+            <div key={rowIndex} style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
+              {row.map((colorHex, colIndex) => {
+                const maskColor = colorHex + "2E";
+                return (
+                  <div
+                    key={colIndex}
+                    onClick={() => bulkRecolor(maskColor)}
+                    style={{
+                      width: "28px", height: "28px",
+                      borderRadius: "6px",
+                      background: maskColor,
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      cursor: "pointer"
+                    }}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
 
       {loading && (
-        <div className="loading-spinner">
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "20px", marginTop: "60px" }}>
           <div className="spinner-neon"></div>
-          <p style={{ color: 'var(--text-secondary)' }}>Loading songs...</p>
+          <p style={{ color: "var(--text-secondary)" }}>
+            Loading library...
+          </p>
         </div>
       )}
 
       {!loading && songs.length === 0 && (
         <div className="empty-state">
-          <p>No songs added yet.</p>
+          <p>No tracks added yet. Add some flavor to your library.</p>
         </div>
       )}
 
       {!loading && songs.length > 0 && (
         <div className="song-grid">
-          {songs.map(song => {
-            const isCardPlaying = currentSong?._id === song._id && isPlaying;
+          {songs.map((song) => {
+            const isCardPlaying = currentSong?.id === song.id && isPlaying;
 
             const handleCardClick = (e) => {
-              if (e.target.closest('button') || e.target.closest('.added-message')) {
-                return;
-              }
+              if (e.target.closest("button") || e.target.closest(".added-message")) return;
+
               setExpandedSong(song);
               setAutoPlay(false);
             };
 
             const handlePlayPause = (e) => {
               e.stopPropagation();
+
               if (isCardPlaying) {
                 togglePlayPause();
               } else {
@@ -238,43 +580,57 @@ function Home() {
             };
 
             return (
-              <div key={song._id} className="song-card" onClick={handleCardClick} style={{ cursor: 'pointer' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', width: '100%' }}>
-                  <div className="song-card-title" style={{ flex: 1, marginBottom: 0, minWidth: 0 }}>🎵 {song.title}</div>
-                  <div className="song-card-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                    <button
-                      className="control-btn"
-                      style={{ width: '32px', height: '32px', fontSize: '14px' }}
-                      onClick={handlePlayPause}
-                    >
-                      {isCardPlaying ? '⏸' : '▶'}
-                    </button>
-                    <button
-                      className="btn-small btn-success"
-                      style={{ fontSize: '12px', padding: '8px 12px', whiteSpace: 'nowrap' }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addToQueue(song);
-                        setAddedToQueueId(song._id);
-                        setTimeout(() => setAddedToQueueId(null), 2000);
-                      }}
-                    >
-                      Add to Queue
-                    </button>
-                  </div>
-                </div>
-                {addedToQueueId === song._id && (
-                  <div className="added-message" style={{
-                    color: '#00ff66',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    marginTop: '6px',
-                    textAlign: 'left',
-                    animation: 'fadeIn 0.3s ease-in'
-                  }}>
-                    ✓ Added to Queue
+              <div
+                key={song.id}
+                className={`song-card${selectedIds.includes(song.id) ? " song-card-selected" : ""}`}
+                style={{ backgroundColor: song.color && song.color !== "#15151a" ? song.color : "", position: "relative", outline: selectedIds.includes(song.id) ? "2px solid var(--accent-cyan)" : "none" }}
+                onClick={selectMode ? () => toggleSelect(song.id) : handleCardClick}
+              >
+                {selectMode && (
+                  <div style={{ position: "absolute", top: "10px", left: "10px", zIndex: 5 }}>
+                    <div style={{
+                      width: "20px", height: "20px",
+                      borderRadius: "6px",
+                      border: `2px solid ${selectedIds.includes(song.id) ? "var(--accent-cyan)" : "rgba(255,255,255,0.3)"}`,
+                      background: selectedIds.includes(song.id) ? "var(--accent-cyan)" : "rgba(0,0,0,0.4)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "12px", color: "#000", fontWeight: "bold"
+                    }}>
+                      {selectedIds.includes(song.id) ? "✓" : ""}
+                    </div>
                   </div>
                 )}
+                <div className="song-card-info">
+                  <div className="song-card-title">{song.title}</div>
+                  
+                  {addedToQueueIds.includes(song.id) && (
+                    <div className="added-message" style={{ color: "#10b981", fontSize: "11px", fontWeight: "600", marginTop: "4px" }}>
+                      ✓ Added to Queue
+                    </div>
+                  )}
+                </div>
+
+                <div className="song-card-actions">
+                  <button
+                    className="control-btn"
+                    style={{ width: "40px", height: "40px" }}
+                    onClick={handlePlayPause}
+                  >
+                    {isCardPlaying ? "⏸" : "▶"}
+                  </button>
+
+                  <button
+                    className="btn-small"
+                    style={buttonGreenQueueIds.includes(song.id) ? { background: "#10b981", color: "white", border: "1px solid #10b981" } : { background: "transparent", color: "var(--text-primary)", border: "1px solid rgba(255, 255, 255, 0.3)" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addToQueue(song);
+                      showAddedMessage(song.id);
+                    }}
+                  >
+                    {buttonGreenQueueIds.includes(song.id) ? "✓ Added" : "+ Queue"}
+                  </button>
+                </div>
               </div>
             );
           })}

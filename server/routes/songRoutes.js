@@ -7,7 +7,8 @@ const {
   addSong,
   getSongs,
   deleteSong,
-  updateSong
+  updateSong,
+  getActiveDownloads
 } = require("../controllers/songsController");
 
 router.post("/addSong", authMiddleware, addSong);
@@ -16,6 +17,8 @@ router.get("/songs", authMiddleware, getSongs);
 
 router.delete("/songs/:id", authMiddleware, deleteSong);
 
-router.post("/editTitle", authMiddleware, updateSong);
+router.post("/updateSong", authMiddleware, updateSong);
+
+router.get("/downloads/active", authMiddleware, getActiveDownloads);
 
 module.exports = router;

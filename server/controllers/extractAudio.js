@@ -86,5 +86,94 @@ const extractAudio = (youtubeUrl, outputBasePath) => {
 
   });
 };
+const extractPlaylistItems = (playlistUrl) => {
+  return new Promise((resolve, reject) => {
+    let stdoutData = "";
+    let stderrData = "";
 
-module.exports = extractAudio;
+    const args = ["--flat-playlist", "--dump-json", playlistUrl];
+    console.log("Running:", YTDLP_PATH, args.join(" "));
+
+    const yt = spawn(YTDLP_PATH, args);
+
+    const timeout = setTimeout(() => {
+      yt.kill("SIGKILL");
+      reject(new Error("yt-dlp playlist extraction timeout"));
+    }, 2 * 60 * 1000); // 2 minutes should be ample for playlist metadata
+
+    yt.stdout.on("data", (data) => {
+      stdoutData += data.toString();
+    });
+
+    yt.stderr.on("data", (data) => {
+      stderrData += data.toString();
+    });
+
+    yt.on("error", (err) => {
+      clearTimeout(timeout);
+      reject(new Error(`yt-dlp spawn failed: ${err.message}`));
+    });
+
+    yt.on("close", (code) => {
+      clearTimeout(timeout);
+      if (code !== 0) {
+        return reject(new Error(stderrData.slice(-500)));
+      }
+
+      const items = stdoutData.trim().split("\n").map(line => {
+        try {
+          return JSON.parse(line);
+        } catch(e) {
+          return null;
+        }
+      }).filter(item => item && item.id);
+
+      resolve(items);
+    });
+  });
+};
+
+const extractVideoInfo = (videoUrl) => {
+  return new Promise((resolve, reject) => {
+    let stdoutData = "";
+    let stderrData = "";
+
+    const args = ["--dump-json", "--no-playlist", videoUrl];
+    
+    const yt = spawn(YTDLP_PATH, args);
+
+    const timeout = setTimeout(() => {
+      yt.kill("SIGKILL");
+      reject(new Error("yt-dlp video info timeout"));
+    }, 60 * 1000); // 1 minute
+
+    yt.stdout.on("data", (data) => {
+      stdoutData += data.toString();
+    });
+
+    yt.stderr.on("data", (data) => {
+      stderrData += data.toString();
+    });
+
+    yt.on("error", (err) => {
+      clearTimeout(timeout);
+      reject(new Error(`yt-dlp spawn failed: ${err.message}`));
+    });
+
+    yt.on("close", (code) => {
+      clearTimeout(timeout);
+      if (code !== 0) {
+        return reject(new Error(stderrData.slice(-500)));
+      }
+
+      try {
+        const info = JSON.parse(stdoutData.trim());
+        resolve({ title: info.title, id: info.id });
+      } catch(e) {
+        reject(new Error("Failed to parse video info"));
+      }
+    });
+  });
+};
+
+module.exports = { extractAudio, extractPlaylistItems, extractVideoInfo };

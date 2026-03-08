@@ -19,6 +19,11 @@ const userSongSchema = new mongoose.Schema({
     required: true
   },
 
+  color: {
+    type: String,
+    default: ""
+  },
+
   createdAt: {
     type: Date,
     default: Date.now

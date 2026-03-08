@@ -4,128 +4,240 @@ const fs = require("fs");
 const Song = require("../models/Song");
 const UserSong = require("../models/UserSong");
 
-const extractAudio = require("./extractAudio");
+const { extractAudio, extractPlaylistItems, extractVideoInfo } = require("./extractAudio");
 const uploadToCloudinary = require("./uploadToCloudinary");
 
 const cloudinary = require("cloudinary").v2;
 
+// Track active downloads in memory: { userId: [{ id: 'youtubeId', title: 'Song Title', status: 'queued'|'downloading'|'uploading'|'done', url: '', color: '' }] }
+const activeDownloads = {};
+const isProcessingQueue = {};
 
+const PALETTE = [
+  "#de677c", "#9463ae", "#4d7acd", "#2cb8e9", "#4ef4f5", "#a6fed5", "#fedbaa", "#d85b7e",
+  "#fc7575", "#df56c8", "#b952c4", "#8b18a2", "#ec13b0", "#8e16cc", "#fea2f0", "#d1f6ff",
+  "#708cfd", "#11ccfa", "#3fead7", "#c4e6db", "#ebc1ef", "#e38cfe", "#cc72fd", "#ae5cfc",
+  "#061350", "#0c3b88", "#0b7190", "#10a56e", "#35d487", "#c1cbab", "#87abdf", "#0cf1f5",
+  "#c9d0ff", "#aeb8fc", "#f0d5fd", "#d7beff", "#affcf5", "#92d5ef", "#ffadcf", "#cd8cfe"
+];
+
+function getRandomNeonColor() {
+  const hex = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+  return hex + "2E"; // Same transparency as the frontend picker logic
+}
+
+function formatYoutubeTitle(rawTitle) {
+  if (!rawTitle) return "Unknown Track";
+
+  // 1. Remove text inside parentheses, brackets, or angle brackets
+  // E.g., "(Official Video)", "[Lyric Video]", "<4K>"
+  let title = rawTitle.replace(/[\[\(\<].*?[\]\)\>]/g, "");
+
+  // 2. Split by common delimiters and take the FIRST meaningful part.
+  // Common delimiters: ' | ', ' - ', ' // ', ' • ', ' · ', ' ~ '
+  // We use splits because usually the song title is the first thing,
+  // before the artist name or album name separated by these characters.
+  const delimiters = /\||-|\/\/|•|·|~/;
+  const parts = title.split(delimiters);
+  
+  // Try to find the first part that actually contains words
+  let bestPart = parts[0];
+  for (let part of parts) {
+    if (part.trim().length > 0) {
+      bestPart = part;
+      break;
+    }
+  }
+
+  // 3. Clean up leading/trailing whitespace and lingering quotes or commas
+  title = bestPart.replace(/^["',]+|["',]+$/g, "").trim();
+
+  // If we accidentally erased everything, fall back to the original string sans brackets
+  if (!title) {
+    title = rawTitle.replace(/[\[\(\<].*?[\]\)\>]/g, "").trim() || "Unknown Track";
+  }
+
+  return title;
+}
 
 function extractYoutubeId(url) {
-
-  const regExp =
-    /(?:youtube\.com\/(?:.*v=|.*\/)|youtu\.be\/)([^"&?\/\s]{11})/;
-
+  const regExp = /(?:youtube\.com\/(?:.*v=|.*\/)|youtu\.be\/)([^"&?\/\s]{11})/;
   const match = url.match(regExp);
-
   return match ? match[1] : null;
 }
 
-
-const addSong = async (req, res) => {
+const processUserQueue = async (userId) => {
+  if (isProcessingQueue[userId]) return;
+  isProcessingQueue[userId] = true;
 
   try {
+    while (activeDownloads[userId] && activeDownloads[userId].length > 0) {
+      // Find next queued task
+      const taskIndex = activeDownloads[userId].findIndex(t => t.status === 'queued');
+      if (taskIndex === -1) break; // Nothing left to process
 
-    const { title, youtubeUrl } = req.body;
+      const task = activeDownloads[userId][taskIndex];
+      task.status = 'downloading';
 
-    if (!title || !youtubeUrl) {
-      return res.status(400).json({
-        error: "Song title and YouTube URL required"
-      });
+      try {
+        const { id: youtubeId, title, url: youtubeUrl, color } = task;
+
+        const existingSong = await Song.findOne({ youtubeId });
+
+        if (existingSong) {
+          const userSongExists = await UserSong.findOne({ user: userId, song: existingSong._id });
+          if (!userSongExists) {
+            await UserSong.create({
+              user: userId,
+              song: existingSong._id,
+              customTitle: title,
+              color: color || ""
+            });
+          }
+          // Remove from tracker immediately since no download needed
+          activeDownloads[userId] = activeDownloads[userId].filter(t => t.id !== youtubeId);
+          continue; 
+        }
+
+        const baseName = Date.now().toString() + "-" + Math.random().toString(36).substring(7);
+        const songsDir = path.join(__dirname, "../songs");
+
+        if (!fs.existsSync(songsDir)) {
+          fs.mkdirSync(songsDir, { recursive: true });
+        }
+
+        const localBase = path.join(songsDir, baseName);
+        const localFile = `${localBase}.mp3`;
+
+        await extractAudio(youtubeUrl, localBase);
+
+        task.status = 'uploading';
+        const uploadResult = await uploadToCloudinary(localFile);
+        const audioUrl = uploadResult.secure_url;
+        const cloudinaryId = uploadResult.public_id;
+
+        fs.promises.unlink(localFile).catch(() => { });
+
+        const song = await Song.create({
+          youtubeId,
+          audioUrl,
+          cloudinaryId
+        });
+
+        await UserSong.create({
+          user: userId,
+          song: song._id,
+          customTitle: title,
+          color: color || ""
+        });
+
+      } catch (err) {
+        console.error(`Failed to process queued song ${task.id}:`, err);
+      } finally {
+        activeDownloads[userId] = activeDownloads[userId].filter(t => t.id !== task.id);
+      }
+    }
+  } finally {
+    isProcessingQueue[userId] = false;
+  }
+};
+
+const enqueueDownload = (userId, youtubeId, title, url, color) => {
+  if (!activeDownloads[userId]) activeDownloads[userId] = [];
+  
+  if (!activeDownloads[userId].find(t => t.id === youtubeId)) {
+    activeDownloads[userId].push({
+      id: youtubeId,
+      title: title || "Unknown Track",
+      url,
+      color,
+      status: 'queued'
+    });
+  }
+
+  // Trigger processing if not already running
+  processUserQueue(userId);
+};
+
+const addSong = async (req, res) => {
+  try {
+    const { title, youtubeUrl, colorMode, color } = req.body;
+
+    if (!youtubeUrl) {
+      return res.status(400).json({ error: "YouTube URL required" });
     }
 
+    const isPlaylist = youtubeUrl.includes("list=");
 
+    if (isPlaylist) {
+      const items = await extractPlaylistItems(youtubeUrl);
+      
+      if (!items || items.length === 0) {
+        return res.status(400).json({ error: "Could not extract data from the playlist. Is it private or invalid?" });
+      }
+
+      res.json({ 
+        message: `Playlist processing started! ${items.length} songs are being downloaded in the background.`
+      });
+
+      // Background process to gather metadata and enqueue
+      (async () => {
+        for (const item of items) {
+          if (!item.id || !item.title) continue;
+          
+          const songTitle = formatYoutubeTitle(item.title);
+          const songUrl = `https://www.youtube.com/watch?v=${item.id}`;
+          
+          let songColor = color;
+          if (colorMode === 'random_all' || !color) {
+            songColor = getRandomNeonColor();
+          }
+
+          enqueueDownload(req.userId, item.id, songTitle, songUrl, songColor);
+        }
+      })();
+      
+      return;
+    }
+
+    // Single Song Flow
     const youtubeId = extractYoutubeId(youtubeUrl);
 
     if (!youtubeId) {
       return res.status(400).json({ error: "Invalid YouTube URL" });
     }
 
-
-
-    const existingSong = await Song.findOne({ youtubeId });
-
-
-
-    if (existingSong) {
-
-      await UserSong.create({
-        user: req.userId,
-        song: existingSong._id,
-        customTitle: title
-      });
-
-      return res.json({
-        message: "Song already downloaded. Added instantly."
-      });
-
-    }
-
-
-
-    const baseName = Date.now().toString();
-
-    const songsDir = path.join(__dirname, "../songs");
-
-    if (!fs.existsSync(songsDir)) {
-      fs.mkdirSync(songsDir, { recursive: true });
-    }
-
-    const localBase = path.join(songsDir, baseName);
-    const localFile = `${localBase}.mp3`;
-
-
-
-    await extractAudio(youtubeUrl, localBase);
-
-
-
-    const uploadResult = await uploadToCloudinary(localFile);
-
-    const audioUrl = uploadResult.secure_url;
-    const cloudinaryId = uploadResult.public_id;
-
-
-
-    fs.promises.unlink(localFile).catch(() => { });
-
-
-
-    const song = await Song.create({
-      youtubeId,
-      audioUrl,
-      cloudinaryId
-    });
-
-
-
-    await UserSong.create({
-      user: req.userId,
-      song: song._id,
-      customTitle: title
-    });
-
-
+    let finalTitle = title ? title.trim() : null;
 
     res.json({
-      message: "Song downloaded and added successfully"
+      message: "Song processing started! It is downloading and adding to your library in the background."
     });
 
-  }
+    // Run in background so client doesn't hang fetching metadata
+    (async () => {
+      if (!finalTitle) {
+        try {
+          const info = await extractVideoInfo(youtubeUrl);
+          finalTitle = formatYoutubeTitle(info.title);
+        } catch (err) {
+          console.error("Failed to extract video info:", err);
+          finalTitle = "Unknown Track";
+        }
+      }
 
-  catch (err) {
+      let songColor = color;
+      if (colorMode === 'random' || !color) {
+        songColor = getRandomNeonColor();
+      }
 
+      enqueueDownload(req.userId, youtubeId, finalTitle, youtubeUrl, songColor);
+    })();
+
+  } catch (err) {
     console.error("ADD SONG ERROR:", err);
-
-    res.status(500).json({
-      error: err.message
-    });
-
+    res.status(500).json({ error: err.message });
   }
-
 };
-
-
 
 const getSongs = async (req, res) => {
 
@@ -139,6 +251,7 @@ const getSongs = async (req, res) => {
     const formattedSongs = songs.map(s => ({
       id: s._id,
       title: s.customTitle,
+      color: s.color || "",
       audioUrl: s.song.audioUrl,
       youtubeId: s.song.youtubeId
     }));
@@ -219,10 +332,10 @@ const deleteSong = async (req, res) => {
 
 const updateSong = async (req, res) => {
   try {
-    const { id, title } = req.body;
-    console.log(id,title)
-    if (!id || !title) {
-      return res.status(400).json({ error: "Song id and title are required" });
+    const { id, title, color } = req.body;
+    
+    if (!id) {
+      return res.status(400).json({ error: "Song id is required" });
     }
 
     const song = await UserSong.findById(id);
@@ -231,11 +344,13 @@ const updateSong = async (req, res) => {
       return res.status(404).json({ error: "Song not found" });
     }
 
-    song.customTitle = title;
+    if (title !== undefined) song.customTitle = title;
+    if (color !== undefined) song.color = color;
+    
     await song.save();
 
     res.json({
-      message: "Song title updated successfully!",
+      message: "Song updated successfully!",
       song
     });
 
@@ -245,9 +360,15 @@ const updateSong = async (req, res) => {
   }
 };
 
+const getActiveDownloads = (req, res) => {
+  const userDownloads = activeDownloads[req.userId] || [];
+  res.json(userDownloads);
+};
+
 module.exports = {
   addSong,
   getSongs,
   deleteSong,
-  updateSong
+  updateSong,
+  getActiveDownloads
 };
