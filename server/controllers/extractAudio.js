@@ -120,7 +120,7 @@ const extractPlaylistItems = (playlistUrl) => {
         return reject(new Error(stderrData.slice(-500)));
       }
 
-      const items = stdoutData.trim().split("\n").map(line => {
+      const items = stdoutData.trim().split(/\r?\n/).map(line => {
         try {
           return JSON.parse(line);
         } catch(e) {

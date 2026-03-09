@@ -8,6 +8,7 @@ import Current from "./pages/current";
 import GlobalPlayer from "./components/GlobalPlayer";
 import Login from "./pages/login";
 import Register from "./pages/register";
+import { ToastProvider } from "./contexts/ToastContext";
 
 const isAuthenticated = () => {
   return !!localStorage.getItem("token");
@@ -15,35 +16,37 @@ const isAuthenticated = () => {
 
 function App() {
   return (
-    <Router>
+    <ToastProvider>
+      <Router>
 
-      <Navbar />
+        <Navbar />
 
-      <Routes>
+        <Routes>
 
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
-        <Route
-          path="/"
-          element={isAuthenticated() ? <Home /> : <Navigate to="/login" />}
-        />
+          <Route
+            path="/"
+            element={isAuthenticated() ? <Home /> : <Navigate to="/login" />}
+          />
 
-        <Route
-          path="/add-song"
-          element={isAuthenticated() ? <AddSong /> : <Navigate to="/login" />}
-        />
+          <Route
+            path="/add-song"
+            element={isAuthenticated() ? <AddSong /> : <Navigate to="/login" />}
+          />
 
-        <Route
-          path="/current"
-          element={isAuthenticated() ? <Current /> : <Navigate to="/login" />}
-        />
+          <Route
+            path="/current"
+            element={isAuthenticated() ? <Current /> : <Navigate to="/login" />}
+          />
 
-      </Routes>
+        </Routes>
 
-      <GlobalPlayer />
+        <GlobalPlayer />
 
-    </Router>
+      </Router>
+    </ToastProvider>
   );
 }
 

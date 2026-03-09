@@ -373,10 +373,49 @@ const getActiveDownloads = (req, res) => {
   res.json(userDownloads);
 };
 
+const cancelDownload = (req, res) => {
+  const { youtubeId } = req.params;
+  const userId = req.userId;
+
+  if (!activeDownloads[userId]) {
+    return res.json({ message: "No active downloads" });
+  }
+
+  const task = activeDownloads[userId].find(t => t.id === youtubeId);
+
+  if (!task) {
+    return res.status(404).json({ error: "Download not found" });
+  }
+
+  if (task.status !== 'queued') {
+    return res.status(400).json({ error: "Cannot cancel a download that is already in progress" });
+  }
+
+  activeDownloads[userId] = activeDownloads[userId].filter(t => t.id !== youtubeId);
+  res.json({ message: "Download removed from queue" });
+};
+
+const cancelAllDownloads = (req, res) => {
+  const userId = req.userId;
+
+  if (!activeDownloads[userId] || activeDownloads[userId].length === 0) {
+    return res.json({ message: "No active downloads", removed: 0 });
+  }
+
+  const before = activeDownloads[userId].length;
+  // Only remove queued items; let in-progress downloads finish
+  activeDownloads[userId] = activeDownloads[userId].filter(t => t.status !== 'queued');
+  const removed = before - activeDownloads[userId].length;
+
+  res.json({ message: `Removed ${removed} queued download(s)`, removed });
+};
+
 module.exports = {
   addSong,
   getSongs,
   deleteSong,
   updateSong,
-  getActiveDownloads
+  getActiveDownloads,
+  cancelDownload,
+  cancelAllDownloads
 };

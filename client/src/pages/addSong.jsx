@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import API from "../config/api";
+import { useToast } from "../contexts/ToastContext";
 
 export default function AddSong() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -12,6 +14,12 @@ export default function AddSong() {
   const [isLoading, setIsLoading] = useState(false);
   const [activeDownloads, setActiveDownloads] = useState([]);
 
+  const { addToast } = useToast();
+  const navigate = useNavigate();
+  const prevDownloadsRef = useRef([]);
+  // Track whether a session was ever started (to avoid redirecting on first load)
+  const hadDownloadsRef = useRef(false);
+
   // 'random' | 'custom'
   const [colorMode, setColorMode] = useState("random");
   // 'random_all' | 'same_custom'
@@ -23,7 +31,27 @@ export default function AddSong() {
     const fetchDownloads = async () => {
       try {
         const response = await API.get("/downloads/active");
-        setActiveDownloads(response.data || []);
+        const current = response.data || [];
+
+        // Find songs that existed in the previous poll but are now gone → completed
+        const prev = prevDownloadsRef.current;
+        const currentIds = new Set(current.map(t => t.id));
+        const justCompleted = prev.filter(t => !currentIds.has(t.id));
+        justCompleted.forEach(t => addToast(t.title));
+
+        if (current.length > 0) hadDownloadsRef.current = true;
+
+        // If we had downloads and now there are none → all done, go home
+        if (hadDownloadsRef.current && current.length === 0 && prev.length > 0) {
+          hadDownloadsRef.current = false;
+          setActiveDownloads([]);
+          prevDownloadsRef.current = [];
+          navigate("/");
+          return;
+        }
+
+        prevDownloadsRef.current = current;
+        setActiveDownloads(current);
       } catch (err) {
         // Silent fail for polling
       }
@@ -32,7 +60,7 @@ export default function AddSong() {
     fetchDownloads();
     const interval = setInterval(fetchDownloads, 2500);
     return () => clearInterval(interval);
-  }, []);
+  }, [addToast, navigate]);
 
   // Custom curated palette based on image reference
   const PALETTE_GRID = [
@@ -369,7 +397,31 @@ export default function AddSong() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
             <div className="spinner-neon" style={{ width: "24px", height: "24px", borderWidth: "2px", animationDuration: "1.5s" }}></div>
-            <h3 style={{ margin: 0, fontSize: "1.1rem", color: "#fff", fontWeight: "600" }}>Active Downloads</h3>
+            <h3 style={{ margin: 0, fontSize: "1.1rem", color: "#fff", fontWeight: "600", flex: 1 }}>Active Downloads</h3>
+            <button
+              onClick={async () => {
+                setActiveDownloads(prev => prev.filter(t => t.status !== 'queued'));
+                try {
+                  await API.delete("/downloads/all");
+                } catch (err) {
+                  console.error("Stop all failed", err);
+                }
+              }}
+              style={{
+                background: "rgba(239,68,68,0.15)",
+                border: "1px solid rgba(239,68,68,0.4)",
+                color: "#ef4444",
+                borderRadius: "8px",
+                padding: "4px 10px",
+                fontSize: "0.78rem",
+                fontWeight: "600",
+                cursor: "pointer",
+                whiteSpace: "nowrap"
+              }}
+              title="Remove all queued downloads"
+            >
+              Stop All
+            </button>
           </div>
           
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -386,8 +438,39 @@ export default function AddSong() {
                   gap: "6px"
                 }}
               >
-                <div style={{ color: "#fff", fontSize: "0.95rem", fontWeight: "500", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {task.title}
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                  <div style={{ color: "#fff", fontSize: "0.95rem", fontWeight: "500", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
+                    {task.title}
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (task.status !== 'queued') return;
+                      setActiveDownloads(prev => prev.filter(t => t.id !== task.id));
+                      try {
+                        await API.delete(`/downloads/${task.id}`);
+                      } catch (err) {
+                        console.error("Cancel failed", err);
+                      }
+                    }}
+                    disabled={task.status !== 'queued'}
+                    title={task.status !== 'queued' ? "Can't cancel — already in progress" : "Remove from queue"}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: task.status === 'queued' ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.15)",
+                      cursor: task.status === 'queued' ? "pointer" : "not-allowed",
+                      fontSize: "1rem",
+                      lineHeight: 1,
+                      padding: "2px 4px",
+                      borderRadius: "4px",
+                      flexShrink: 0,
+                      transition: "color 0.15s ease"
+                    }}
+                    onMouseEnter={e => { if (task.status === 'queued') e.currentTarget.style.color = "#ef4444"; }}
+                    onMouseLeave={e => { if (task.status === 'queued') e.currentTarget.style.color = "rgba(255,255,255,0.5)"; }}
+                  >
+                    ✕
+                  </button>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ 
@@ -407,4 +490,4 @@ export default function AddSong() {
       )}
     </div>
   );
-}
+}
