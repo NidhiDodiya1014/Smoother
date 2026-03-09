@@ -133,9 +133,18 @@ const processUserQueue = async (userId) => {
 
       } catch (err) {
         console.error(`Failed to process queued song ${task.id}:`, err);
-      } finally {
-        activeDownloads[userId] = activeDownloads[userId].filter(t => t.id !== task.id);
+        // Mark as failed so the frontend can show an error toast instead of a success toast.
+        // Keep it in the list briefly so the next poll sees status='failed', then remove it.
+        task.status = 'failed';
+        setTimeout(() => {
+          if (activeDownloads[userId]) {
+            activeDownloads[userId] = activeDownloads[userId].filter(t => t.id !== task.id);
+          }
+        }, 5000);
+        continue;
       }
+      // Success — remove from active list immediately
+      activeDownloads[userId] = activeDownloads[userId].filter(t => t.id !== task.id);
     }
   } finally {
     isProcessingQueue[userId] = false;

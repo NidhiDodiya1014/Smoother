@@ -33,16 +33,32 @@ export default function AddSong() {
         const response = await API.get("/downloads/active");
         const current = response.data || [];
 
-        // Find songs that existed in the previous poll but are now gone → completed
         const prev = prevDownloadsRef.current;
         const currentIds = new Set(current.map(t => t.id));
-        const justCompleted = prev.filter(t => !currentIds.has(t.id));
-        justCompleted.forEach(t => addToast(t.title));
 
-        if (current.length > 0) hadDownloadsRef.current = true;
+        // Songs that were in the previous poll but are now gone
+        const disappeared = prev.filter(t => !currentIds.has(t.id));
+        disappeared.forEach(t => {
+          if (t.status === 'failed') {
+            // Was already marked failed on the last poll → show error toast
+            addToast(t.title, "error");
+          } else {
+            // Disappeared without a failed status → successfully saved to DB
+            addToast(t.title, "success");
+          }
+        });
 
-        // If we had downloads and now there are none → all done, go home
-        if (hadDownloadsRef.current && current.length === 0 && prev.length > 0) {
+        // Songs newly marked as failed in this poll (not yet removed, but status changed)
+        // We don't toast these yet — wait until they disappear so we don't double-toast.
+
+        // Count only non-failed items as "real" active downloads
+        const activeNonFailed = current.filter(t => t.status !== 'failed');
+        const prevNonFailed = prev.filter(t => t.status !== 'failed');
+
+        if (activeNonFailed.length > 0) hadDownloadsRef.current = true;
+
+        // Redirect home only when all non-failed downloads are done
+        if (hadDownloadsRef.current && activeNonFailed.length === 0 && prevNonFailed.length > 0) {
           hadDownloadsRef.current = false;
           setActiveDownloads([]);
           prevDownloadsRef.current = [];
@@ -473,14 +489,14 @@ export default function AddSong() {
                   </button>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ 
+                   <span style={{ 
                     fontSize: "0.75rem", 
-                    color: task.status === 'queued' ? "var(--text-secondary)" : task.status === 'downloading' ? "var(--accent-pink)" : "var(--accent-cyan)",
+                    color: task.status === 'queued' ? "var(--text-secondary)" : task.status === 'downloading' ? "var(--accent-pink)" : task.status === 'failed' ? "#ef4444" : "var(--accent-cyan)",
                     textTransform: "uppercase",
                     letterSpacing: "0.5px",
                     fontWeight: "600"
                   }}>
-                    {task.status === 'queued' ? '⏳ Queued' : task.status === 'downloading' ? '⬇️ Downloading' : '☁️ Uploading'}
+                    {task.status === 'queued' ? '⏳ Queued' : task.status === 'downloading' ? '⬇️ Downloading' : task.status === 'failed' ? '❌ Failed' : '☁️ Uploading'}
                   </span>
                 </div>
               </div>
