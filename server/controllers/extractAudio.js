@@ -21,7 +21,7 @@ const YTDLP_PATH = getYtDlpPath();
 
 // Fallback chain: tv_embedded works on server IPs without login,
 // ios and web are fallbacks if tv_embedded is also blocked.
-const PLAYER_CLIENTS = ["tv_embedded", "ios", "web"];
+const PLAYER_CLIENTS = ["ios", "mweb", "web", "tv_embedded"];
 
 const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
   return new Promise((resolve, reject) => {
@@ -69,18 +69,12 @@ const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
       clearTimeout(timeout);
 
       if (code !== 0) {
-        const isBlocked =
-          stderrOutput.includes("Sign in to confirm") ||
-          stderrOutput.includes("LOGIN_REQUIRED") ||
-          stderrOutput.includes("bot");
-
-        if (isBlocked && clientIndex + 1 < PLAYER_CLIENTS.length) {
-          console.log(`Client "${client}" blocked by YouTube. Retrying with "${PLAYER_CLIENTS[clientIndex + 1]}"...`);
+        if (clientIndex + 1 < PLAYER_CLIENTS.length) {
+          console.log(`Client "${client}" failed. Retrying with "${PLAYER_CLIENTS[clientIndex + 1]}"...`);
           return tryExtractAudio(youtubeUrl, outputBasePath, clientIndex + 1)
             .then(resolve)
             .catch(reject);
         }
-
         return reject(new Error(stderrOutput.slice(-500)));
       }
 
