@@ -4,50 +4,48 @@ const fs = require("fs");
 /*
   Determine yt-dlp path safely for:
   - Local Windows dev
-  - Linux / Railway / Docker
+  - Linux / Azure / Docker
   - Optional ENV override
 */
 const getYtDlpPath = () => {
-
-  // ⭐ Best practice — allow ENV override
   if (process.env.YTDLP_PATH) {
     return process.env.YTDLP_PATH;
   }
-
-  // Windows local development
   if (process.platform === "win32") {
     return "C:\\Windows\\yt-dlp.exe";
   }
-
-  // Linux / Railway / Docker
   return "yt-dlp";
 };
 
 const YTDLP_PATH = getYtDlpPath();
 
-const extractAudio = (youtubeUrl, outputBasePath) => {
-  return new Promise((resolve, reject) => {
+// Fallback chain: tv_embedded works on server IPs without login,
+// ios and web are fallbacks if tv_embedded is also blocked.
+const PLAYER_CLIENTS = ["tv_embedded", "ios", "web"];
 
+const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
+  return new Promise((resolve, reject) => {
+    if (clientIndex >= PLAYER_CLIENTS.length) {
+      return reject(new Error("All player clients failed. YouTube may be blocking this server IP."));
+    }
+
+    const client = PLAYER_CLIENTS[clientIndex];
     let stderrOutput = "";
 
     const args = [
       "-x",
       "--audio-format", "mp3",
       "--no-playlist",
-
-      "--extractor-args", "youtube:player_client=android",
-
-      "--verbose",
-
+      "--no-update",
+      "--extractor-args", `youtube:player_client=${client}`,
       "-o", `${outputBasePath}.%(ext)s`,
       youtubeUrl
     ];
 
-    console.log("Running:", YTDLP_PATH, args.join(" "));
+    console.log(`Running (client=${client}):`, YTDLP_PATH, args.join(" "));
 
     const yt = spawn(YTDLP_PATH, args);
 
-    /* ⭐ Timeout Safety (10 min) */
     const timeout = setTimeout(() => {
       yt.kill("SIGKILL");
       reject(new Error("yt-dlp timeout exceeded (10 minutes)"));
@@ -71,27 +69,40 @@ const extractAudio = (youtubeUrl, outputBasePath) => {
       clearTimeout(timeout);
 
       if (code !== 0) {
+        const isBlocked =
+          stderrOutput.includes("Sign in to confirm") ||
+          stderrOutput.includes("LOGIN_REQUIRED") ||
+          stderrOutput.includes("bot");
+
+        if (isBlocked && clientIndex + 1 < PLAYER_CLIENTS.length) {
+          console.log(`Client "${client}" blocked by YouTube. Retrying with "${PLAYER_CLIENTS[clientIndex + 1]}"...`);
+          return tryExtractAudio(youtubeUrl, outputBasePath, clientIndex + 1)
+            .then(resolve)
+            .catch(reject);
+        }
+
         return reject(new Error(stderrOutput.slice(-500)));
       }
 
-      /* ⭐ Validate Output File Exists */
       const expectedFile = `${outputBasePath}.mp3`;
-
       if (!fs.existsSync(expectedFile)) {
         return reject(new Error("yt-dlp finished but audio file not found"));
       }
 
       resolve();
     });
-
   });
 };
+
+const extractAudio = (youtubeUrl, outputBasePath) =>
+  tryExtractAudio(youtubeUrl, outputBasePath, 0);
+
 const extractPlaylistItems = (playlistUrl) => {
   return new Promise((resolve, reject) => {
     let stdoutData = "";
     let stderrData = "";
 
-    const args = ["--flat-playlist", "--dump-json", playlistUrl];
+    const args = ["--flat-playlist", "--dump-json", "--no-update", playlistUrl];
     console.log("Running:", YTDLP_PATH, args.join(" "));
 
     const yt = spawn(YTDLP_PATH, args);
@@ -99,7 +110,7 @@ const extractPlaylistItems = (playlistUrl) => {
     const timeout = setTimeout(() => {
       yt.kill("SIGKILL");
       reject(new Error("yt-dlp playlist extraction timeout"));
-    }, 2 * 60 * 1000); // 2 minutes should be ample for playlist metadata
+    }, 2 * 60 * 1000);
 
     yt.stdout.on("data", (data) => {
       stdoutData += data.toString();
@@ -123,7 +134,7 @@ const extractPlaylistItems = (playlistUrl) => {
       const items = stdoutData.trim().split(/\r?\n/).map(line => {
         try {
           return JSON.parse(line);
-        } catch(e) {
+        } catch (e) {
           return null;
         }
       }).filter(item => item && item.id);
@@ -138,14 +149,14 @@ const extractVideoInfo = (videoUrl) => {
     let stdoutData = "";
     let stderrData = "";
 
-    const args = ["--dump-json", "--no-playlist", videoUrl];
-    
+    const args = ["--dump-json", "--no-playlist", "--no-update", videoUrl];
+
     const yt = spawn(YTDLP_PATH, args);
 
     const timeout = setTimeout(() => {
       yt.kill("SIGKILL");
       reject(new Error("yt-dlp video info timeout"));
-    }, 60 * 1000); // 1 minute
+    }, 60 * 1000);
 
     yt.stdout.on("data", (data) => {
       stdoutData += data.toString();
@@ -169,7 +180,7 @@ const extractVideoInfo = (videoUrl) => {
       try {
         const info = JSON.parse(stdoutData.trim());
         resolve({ title: info.title, id: info.id });
-      } catch(e) {
+      } catch (e) {
         reject(new Error("Failed to parse video info"));
       }
     });
