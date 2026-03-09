@@ -4,6 +4,12 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 :root {
@@ -297,7 +303,7 @@ body {
 
 /* Page Layout */
 .page-container {
-  padding: 40px 20px;
+  padding: 40px 20px 140px;
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;

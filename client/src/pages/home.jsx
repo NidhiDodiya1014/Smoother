@@ -212,6 +212,42 @@ function Home() {
     }, 60000);
   };
 
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const bulkDelete = async () => {
+    try {
+      setProcessing(true);
+      await Promise.all(selectedIds.map((id) => API.delete(`/songs/${id}`)));
+      setSongs((prev) => prev.filter((s) => !selectedIds.includes(s.id)));
+      setSelectedIds([]);
+      setSelectMode(false);
+    } catch (err) {
+      console.error("Bulk delete failed", err);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const bulkRecolor = async (color) => {
+    try {
+      await Promise.all(
+        selectedIds.map((id) => API.post("/updateSong", { id, color }))
+      );
+      setSongs((prev) =>
+        prev.map((s) => selectedIds.includes(s.id) ? { ...s, color } : s)
+      );
+      setBulkColorPicking(false);
+      setSelectedIds([]);
+      setSelectMode(false);
+    } catch (err) {
+      console.error("Bulk recolor failed", err);
+    }
+  };
+
   if (expandedSong) {
     const isExpandedSongPlaying =
       currentSong?.id === expandedSong.id && isPlaying;
@@ -563,6 +599,7 @@ function Home() {
             const isCardPlaying = currentSong?.id === song.id && isPlaying;
 
             const handleCardClick = (e) => {
+              if (selectMode) return;
               if (e.target.closest("button") || e.target.closest(".added-message")) return;
 
               setExpandedSong(song);
@@ -579,11 +616,19 @@ function Home() {
               }
             };
 
+            const isSelected = selectedIds.includes(song.id);
+
             return (
               <div
                 key={song.id}
-                className={`song-card${selectedIds.includes(song.id) ? " song-card-selected" : ""}`}
-                style={{ backgroundColor: song.color && song.color !== "#15151a" ? song.color : "", position: "relative", outline: selectedIds.includes(song.id) ? "2px solid var(--accent-cyan)" : "none" }}
+                className={`song-card${isSelected ? " song-card-selected" : ""}`}
+                style={{
+                  backgroundColor: song.color && song.color !== "#15151a" ? song.color : "",
+                  position: "relative",
+                  outline: isSelected ? "2.5px solid #10b981" : selectMode ? "2px solid rgba(255,255,255,0.1)" : "none",
+                  transition: "outline 0.15s ease, box-shadow 0.15s ease",
+                  boxShadow: isSelected ? "0 0 12px rgba(16,185,129,0.35)" : undefined
+                }}
                 onClick={selectMode ? () => toggleSelect(song.id) : handleCardClick}
               >
                 {selectMode && (
@@ -591,12 +636,13 @@ function Home() {
                     <div style={{
                       width: "20px", height: "20px",
                       borderRadius: "6px",
-                      border: `2px solid ${selectedIds.includes(song.id) ? "var(--accent-cyan)" : "rgba(255,255,255,0.3)"}`,
-                      background: selectedIds.includes(song.id) ? "var(--accent-cyan)" : "rgba(0,0,0,0.4)",
+                      border: `2px solid ${isSelected ? "#10b981" : "rgba(255,255,255,0.4)"}`,
+                      background: isSelected ? "#10b981" : "rgba(0,0,0,0.5)",
                       display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: "12px", color: "#000", fontWeight: "bold"
+                      fontSize: "13px", color: "#fff", fontWeight: "bold",
+                      transition: "all 0.15s ease"
                     }}>
-                      {selectedIds.includes(song.id) ? "✓" : ""}
+                      {isSelected ? "✓" : ""}
                     </div>
                   </div>
                 )}

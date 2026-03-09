@@ -6,11 +6,15 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
+
+    setError("");
+    setLoading(true);
 
     try {
       const res = await API.post("/user/login", {
@@ -23,7 +27,9 @@ export default function Login() {
 
       navigate("/");
     } catch (err) {
-      setError("Invalid email or password");
+      setError(err.response?.data?.message || "Invalid email or password");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -57,8 +63,8 @@ export default function Login() {
 
           {error && <p style={{ color: "#ef4444", marginBottom: "20px", fontSize: "0.9rem" }}>{error}</p>}
 
-          <button className="btn-neon" type="submit" style={{ width: "100%", marginTop: "8px" }}>
-            Login
+          <button className="btn-neon" type="submit" disabled={loading} style={{ width: "100%", marginTop: "8px" }}>
+            {loading ? "Logging in..." : "Login"}
           </button>
         </form>
       </div>
