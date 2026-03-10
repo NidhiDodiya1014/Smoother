@@ -138,12 +138,23 @@ const extractPlaylistItems = (playlistUrl) => {
   });
 };
 
-const extractVideoInfo = (videoUrl) => {
+const extractVideoInfo = (videoUrl, clientIndex = 0) => {
   return new Promise((resolve, reject) => {
+    if (clientIndex >= PLAYER_CLIENTS.length) {
+      return reject(new Error("All player clients failed during video info extraction."));
+    }
+
+    const client = PLAYER_CLIENTS[clientIndex];
     let stdoutData = "";
     let stderrData = "";
 
-    const args = ["--dump-json", "--no-playlist", "--no-update", videoUrl];
+    const args = [
+      "--dump-json",
+      "--no-playlist",
+      "--no-update",
+      "--extractor-args", `youtube:player_client=${client}`,
+      videoUrl
+    ];
 
     const yt = spawn(YTDLP_PATH, args);
 
@@ -167,7 +178,12 @@ const extractVideoInfo = (videoUrl) => {
 
     yt.on("close", (code) => {
       clearTimeout(timeout);
+
       if (code !== 0) {
+        if (clientIndex + 1 < PLAYER_CLIENTS.length) {
+          console.log(`extractVideoInfo: client "${client}" failed. Retrying with "${PLAYER_CLIENTS[clientIndex + 1]}"...`);
+          return extractVideoInfo(videoUrl, clientIndex + 1).then(resolve).catch(reject);
+        }
         return reject(new Error(stderrData.slice(-500)));
       }
 
