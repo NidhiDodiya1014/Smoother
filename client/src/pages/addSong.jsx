@@ -57,7 +57,8 @@ export default function AddSong() {
 
         if (activeNonFailed.length > 0) hadDownloadsRef.current = true;
 
-        if (current.length > 0) {
+        const isStillWorking = current.some(t => ['queued', 'downloading', 'uploading'].includes(t.status));
+        if (!isStillWorking) {
           setIsLoading(false);
         }
 
@@ -162,11 +163,6 @@ export default function AddSong() {
       setTitle("");
       setYoutubeUrl("");
       setColor("");
-      // Wait up to 5 seconds for the sidebar to catch the download via polling,
-      // which will turn off isLoading. If polling fails, turn it off anyway.
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 5000);
     } catch (err) {
       console.error("Add song error:", err);
 
