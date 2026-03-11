@@ -25,11 +25,14 @@ const PLAYER_CLIENTS = ["ios", "mweb", "web", "tv_embedded"];
 
 const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
   return new Promise((resolve, reject) => {
-    if (clientIndex >= PLAYER_CLIENTS.length) {
+    // Expand fallbacks to include 'none'
+    const clientsToTry = [...PLAYER_CLIENTS, "none"];
+
+    if (clientIndex >= clientsToTry.length) {
       return reject(new Error("All player clients failed. YouTube may be blocking this server IP."));
     }
 
-    const client = PLAYER_CLIENTS[clientIndex];
+    const client = clientsToTry[clientIndex];
     let stderrOutput = "";
 
     const args = [
@@ -37,10 +40,13 @@ const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
       "--audio-format", "mp3",
       "--no-playlist",
       "--no-update",
-      "--extractor-args", `youtube:player_client=${client}`,
       "-o", `${outputBasePath}.%(ext)s`,
       youtubeUrl
     ];
+
+    if (client !== "none") {
+      args.splice(4, 0, "--extractor-args", `youtube:player_client=${client}`);
+    }
 
     console.log(`Running (client=${client}):`, YTDLP_PATH, args.join(" "));
 
@@ -69,8 +75,8 @@ const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
       clearTimeout(timeout);
 
       if (code !== 0) {
-        if (clientIndex + 1 < PLAYER_CLIENTS.length) {
-          console.log(`Client "${client}" failed. Retrying with "${PLAYER_CLIENTS[clientIndex + 1]}"...`);
+        if (clientIndex + 1 < clientsToTry.length) {
+          console.log(`Client "${client}" failed. Retrying with "${clientsToTry[clientIndex + 1]}"...`);
           return tryExtractAudio(youtubeUrl, outputBasePath, clientIndex + 1)
             .then(resolve)
             .catch(reject);
