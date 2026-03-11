@@ -57,6 +57,10 @@ export default function AddSong() {
 
         if (activeNonFailed.length > 0) hadDownloadsRef.current = true;
 
+        if (current.length > 0) {
+          setIsLoading(false);
+        }
+
         // Redirect home only when all non-failed downloads are done
         if (hadDownloadsRef.current && activeNonFailed.length === 0 && prevNonFailed.length > 0) {
           hadDownloadsRef.current = false;
@@ -158,6 +162,11 @@ export default function AddSong() {
       setTitle("");
       setYoutubeUrl("");
       setColor("");
+      // Wait up to 5 seconds for the sidebar to catch the download via polling,
+      // which will turn off isLoading. If polling fails, turn it off anyway.
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 5000);
     } catch (err) {
       console.error("Add song error:", err);
 
@@ -171,7 +180,6 @@ export default function AddSong() {
           "Cannot connect to server. Please check if the backend is running."
         );
       }
-    } finally {
       setIsLoading(false);
     }
   };
@@ -491,12 +499,12 @@ export default function AddSong() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                    <span style={{ 
                     fontSize: "0.75rem", 
-                    color: task.status === 'queued' ? "var(--text-secondary)" : task.status === 'downloading' ? "var(--accent-pink)" : task.status === 'failed' ? "#ef4444" : "var(--accent-cyan)",
+                    color: task.status === 'queued' ? "var(--text-secondary)" : task.status === 'downloading' ? "var(--accent-pink)" : task.status === 'failed' ? "#ef4444" : task.status === 'done' ? "#10b981" : "var(--accent-cyan)",
                     textTransform: "uppercase",
                     letterSpacing: "0.5px",
                     fontWeight: "600"
                   }}>
-                    {task.status === 'queued' ? '⏳ Queued' : task.status === 'downloading' ? '⬇️ Downloading' : task.status === 'failed' ? '❌ Failed' : '☁️ Uploading'}
+                    {task.status === 'queued' ? '⏳ Queued' : task.status === 'downloading' ? '⬇️ Downloading' : task.status === 'failed' ? '❌ Failed' : task.status === 'done' ? '✅ Added to Library' : '☁️ Uploading'}
                   </span>
                 </div>
               </div>

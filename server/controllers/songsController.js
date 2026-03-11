@@ -94,8 +94,13 @@ const processUserQueue = async (userId) => {
               color: color || ""
             });
           }
-          // Remove from tracker immediately since no download needed
-          activeDownloads[userId] = activeDownloads[userId].filter(t => t.id !== youtubeId);
+          // Remove from tracker after a slight delay so frontend sees it as 'done'
+          task.status = 'done';
+          setTimeout(() => {
+            if (activeDownloads[userId]) {
+              activeDownloads[userId] = activeDownloads[userId].filter(t => t.id !== youtubeId);
+            }
+          }, 3000);
           continue; 
         }
 
@@ -131,6 +136,14 @@ const processUserQueue = async (userId) => {
           color: color || ""
         });
 
+        // Success — remove from active list after a small delay so frontend shows 'done' state
+        task.status = 'done';
+        setTimeout(() => {
+          if (activeDownloads[userId]) {
+            activeDownloads[userId] = activeDownloads[userId].filter(t => t.id !== task.id);
+          }
+        }, 3000);
+
       } catch (err) {
         console.error(`Failed to process queued song ${task.id}:`, err);
         // Mark as failed so the frontend can show an error toast instead of a success toast.
@@ -143,8 +156,6 @@ const processUserQueue = async (userId) => {
         }, 5000);
         continue;
       }
-      // Success — remove from active list immediately
-      activeDownloads[userId] = activeDownloads[userId].filter(t => t.id !== task.id);
     }
   } finally {
     isProcessingQueue[userId] = false;
