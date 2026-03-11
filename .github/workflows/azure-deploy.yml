@@ -14,20 +14,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
-      - run: npm install
+      - name: Install dependencies
+        run: npm ci
 
-      - run: npm run build --if-present
+      - name: Build
+        run: npm run build --if-present
 
-      - run: zip -r release.zip .
-
-      - uses: azure/webapps-deploy@v3
+      - name: Deploy to Azure
+        uses: azure/webapps-deploy@v3
         with:
           app-name: smoother-backend-nidhi
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE }}
-          package: release.zip
+          package: .
