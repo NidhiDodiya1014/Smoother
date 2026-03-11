@@ -140,11 +140,14 @@ const extractPlaylistItems = (playlistUrl) => {
 
 const extractVideoInfo = (videoUrl, clientIndex = 0) => {
   return new Promise((resolve, reject) => {
-    if (clientIndex >= PLAYER_CLIENTS.length) {
+    // We add an extra null fallback to try without any player client specified
+    const clientsToTry = [...PLAYER_CLIENTS, "none"];
+    
+    if (clientIndex >= clientsToTry.length) {
       return reject(new Error("All player clients failed during video info extraction."));
     }
 
-    const client = PLAYER_CLIENTS[clientIndex];
+    const client = clientsToTry[clientIndex];
     let stdoutData = "";
     let stderrData = "";
 
@@ -152,9 +155,12 @@ const extractVideoInfo = (videoUrl, clientIndex = 0) => {
       "--dump-json",
       "--no-playlist",
       "--no-update",
-      "--extractor-args", `youtube:player_client=${client}`,
       videoUrl
     ];
+
+    if (client !== "none") {
+      args.splice(3, 0, "--extractor-args", `youtube:player_client=${client}`);
+    }
 
     const yt = spawn(YTDLP_PATH, args);
 
@@ -180,8 +186,8 @@ const extractVideoInfo = (videoUrl, clientIndex = 0) => {
       clearTimeout(timeout);
 
       if (code !== 0) {
-        if (clientIndex + 1 < PLAYER_CLIENTS.length) {
-          console.log(`extractVideoInfo: client "${client}" failed. Retrying with "${PLAYER_CLIENTS[clientIndex + 1]}"...`);
+        if (clientIndex + 1 < clientsToTry.length) {
+          console.log(`extractVideoInfo: client "${client}" failed. Retrying with "${clientsToTry[clientIndex + 1]}"...`);
           return extractVideoInfo(videoUrl, clientIndex + 1).then(resolve).catch(reject);
         }
         return reject(new Error(stderrData.slice(-500)));
