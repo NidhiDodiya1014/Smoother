@@ -1,12 +1,6 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
 
-/*
-  Determine yt-dlp path safely for:
-  - Local Windows dev
-  - Linux / Azure / Docker
-  - Optional ENV override
-*/
 const getYtDlpPath = () => {
   if (process.env.YTDLP_PATH) {
     return process.env.YTDLP_PATH;
@@ -19,10 +13,46 @@ const getYtDlpPath = () => {
 
 const YTDLP_PATH = getYtDlpPath();
 
-// Fallback chain: tv_embedded works on server IPs without login,
-// ios and web are fallbacks if tv_embedded is also blocked.
-const PLAYER_CLIENTS = ["ios", "mweb", "web", "tv_embedded"];
+const PLAYER_CLIENTS = ["android", "ios", "android_music", "mweb", "web", "tv_embedded", "web_safari"];
 const COOKIES_FILE = "cookies.txt";
+
+const BASE_YTDLP_ARGS = [
+  "--no-update",
+  "--force-ipv4",
+  "--no-cache-dir",
+  "--socket-timeout", "15",
+  "--playlist-items", "1",
+  "--extractor-retries", "3",
+  "--fragment-retries", "3",
+  "--file-access-retries", "3",
+  "--concurrent-fragments", "5",
+  "--sleep-requests", "1",
+  "--sleep-interval", "1",
+  "--max-sleep-interval", "3"
+];
+
+const getClientArgs = (client) => {
+  const args = [];
+  if (client === "none") return args;
+
+  args.push("--extractor-args", `youtube:player_client=${client}`);
+
+  if (client === "android") {
+    args.push(
+      "--add-header", "User-Agent:com.google.android.youtube/19.16.39",
+      "--add-header", "X-YouTube-Client-Name:3",
+      "--add-header", "X-YouTube-Client-Version:19.16.39"
+    );
+  } else if (client === "ios") {
+    args.push(
+      "--add-header", "User-Agent:com.google.ios.youtube/19.16.3",
+      "--add-header", "X-YouTube-Client-Name:5",
+      "--add-header", "X-YouTube-Client-Version:19.16.3"
+    );
+  }
+  return args;
+};
+
 
 
 const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
@@ -41,20 +71,15 @@ const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
       "-x",
       "--audio-format", "mp3",
       "--no-playlist",
-      "--no-update",
+      ...BASE_YTDLP_ARGS,
       "-o", `${outputBasePath}.%(ext)s`,
+      ...getClientArgs(client),
+      (fs.existsSync(COOKIES_FILE) ? ["--cookies", COOKIES_FILE] : []),
       youtubeUrl
-    ];
-
-    if (client !== "none") {
-      args.splice(4, 0, "--extractor-args", `youtube:player_client=${client}`);
-    }
-
-    if (fs.existsSync(COOKIES_FILE)) {
-      args.push("--cookies", COOKIES_FILE);
-    }
+    ].flat();
 
     console.log(`Running (client=${client}):`, YTDLP_PATH, args.join(" "));
+
 
 
     const yt = spawn(YTDLP_PATH, args);
@@ -109,11 +134,16 @@ const extractPlaylistItems = (playlistUrl) => {
     let stdoutData = "";
     let stderrData = "";
 
-    const args = ["--flat-playlist", "--dump-json", "--no-update", playlistUrl];
-    if (fs.existsSync(COOKIES_FILE)) {
-      args.push("--cookies", COOKIES_FILE);
-    }
+    const args = [
+      "--flat-playlist",
+      "--dump-json",
+      ...BASE_YTDLP_ARGS,
+      (fs.existsSync(COOKIES_FILE) ? ["--cookies", COOKIES_FILE] : []),
+      playlistUrl
+    ].flat();
+
     console.log("Running:", YTDLP_PATH, args.join(" "));
+
 
 
     const yt = spawn(YTDLP_PATH, args);
@@ -171,19 +201,14 @@ const extractVideoInfo = (videoUrl, clientIndex = 0) => {
     const args = [
       "--dump-json",
       "--no-playlist",
-      "--no-update",
+      ...BASE_YTDLP_ARGS,
+      ...getClientArgs(client),
+      (fs.existsSync(COOKIES_FILE) ? ["--cookies", COOKIES_FILE] : []),
       videoUrl
-    ];
-
-    if (client !== "none") {
-      args.splice(3, 0, "--extractor-args", `youtube:player_client=${client}`);
-    }
-
-    if (fs.existsSync(COOKIES_FILE)) {
-      args.push("--cookies", COOKIES_FILE);
-    }
+    ].flat();
 
     const yt = spawn(YTDLP_PATH, args);
+
 
 
     const timeout = setTimeout(() => {

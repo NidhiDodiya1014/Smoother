@@ -6,7 +6,8 @@ const songRoutes = require("./routes/songRoutes");
 
 const app = express();
 
-app.set("trust proxy", true);
+app.set("trust proxy", 1);
+
 
 const allowedOrigins = [
   process.env.FRONTEND_URL,
@@ -27,8 +28,13 @@ app.use(cors({
 const addSongLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
-  message: { error: "Too many requests. Please wait before adding more songs." }
+  message: { error: "Too many requests. Please wait before adding more songs." },
+  keyGenerator: (req) => {
+    const ip = req.headers["x-forwarded-for"]?.split(",")[0] || req.socket.remoteAddress || req.ip;
+    return ip.replace(/:\d+[^:]*$/, "");
+  }
 });
+
 
 app.use(express.json());
 
