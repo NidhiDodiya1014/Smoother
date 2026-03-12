@@ -96,7 +96,13 @@ export const AudioProvider = ({ children }) => {
         if (currentIndex + 1 < queue.length) {
           setCurrentIndex(currentIndex + 1);
         } else if (isLooping && queue.length > 0) {
-          setCurrentIndex(0);
+          if (currentIndex === 0 && queue.length === 1) {
+            // Force reset and play for single-song loop
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+          } else {
+            setCurrentIndex(0);
+          }
         } else {
           setCurrentIndex(null);
           setCurrentSong(null);

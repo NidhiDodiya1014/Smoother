@@ -20,6 +20,7 @@ const BASE_YTDLP_ARGS = [
   "--no-update",
   "--force-ipv4",
   "--no-cache-dir",
+  "--geo-bypass",
   "--socket-timeout", "15",
   "--playlist-items", "1",
   "--extractor-retries", "3",
@@ -28,8 +29,10 @@ const BASE_YTDLP_ARGS = [
   "--concurrent-fragments", "5",
   "--sleep-requests", "1",
   "--sleep-interval", "1",
-  "--max-sleep-interval", "3"
+  "--max-sleep-interval", "3",
+  "--js-runtimes", "node"
 ];
+
 
 const getClientArgs = (client) => {
   const args = [];
