@@ -1,5 +1,6 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
+const path = require("path");
 
 const getYtDlpPath = () => {
   if (process.env.YTDLP_PATH) {
@@ -14,7 +15,8 @@ const getYtDlpPath = () => {
 const YTDLP_PATH = getYtDlpPath();
 
 const PLAYER_CLIENTS = ["android", "ios", "android_music", "mweb", "web", "tv_embedded", "web_safari"];
-const COOKIES_FILE = "cookies.txt";
+
+const COOKIES_FILE = path.join(__dirname, "../cookies.txt");
 
 const BASE_YTDLP_ARGS = [
   "--no-update",
@@ -32,7 +34,6 @@ const BASE_YTDLP_ARGS = [
   "--max-sleep-interval", "3",
   "--js-runtimes", "node"
 ];
-
 
 const getClientArgs = (client) => {
   const args = [];
@@ -56,11 +57,15 @@ const getClientArgs = (client) => {
   return args;
 };
 
-
+const spawnYt = (args) => {
+  return spawn(YTDLP_PATH, args, {
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+};
 
 const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
   return new Promise((resolve, reject) => {
-    // Expand fallbacks to include 'none'
+
     const clientsToTry = [...PLAYER_CLIENTS, "none"];
 
     if (clientIndex >= clientsToTry.length) {
@@ -83,9 +88,7 @@ const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
 
     console.log(`Running (client=${client}):`, YTDLP_PATH, args.join(" "));
 
-
-
-    const yt = spawn(YTDLP_PATH, args);
+    const yt = spawnYt(args);
 
     const timeout = setTimeout(() => {
       yt.kill("SIGKILL");
@@ -147,9 +150,7 @@ const extractPlaylistItems = (playlistUrl) => {
 
     console.log("Running:", YTDLP_PATH, args.join(" "));
 
-
-
-    const yt = spawn(YTDLP_PATH, args);
+    const yt = spawnYt(args);
 
     const timeout = setTimeout(() => {
       yt.kill("SIGKILL");
@@ -171,6 +172,7 @@ const extractPlaylistItems = (playlistUrl) => {
 
     yt.on("close", (code) => {
       clearTimeout(timeout);
+
       if (code !== 0) {
         return reject(new Error(stderrData.slice(-500)));
       }
@@ -178,7 +180,7 @@ const extractPlaylistItems = (playlistUrl) => {
       const items = stdoutData.trim().split(/\r?\n/).map(line => {
         try {
           return JSON.parse(line);
-        } catch (e) {
+        } catch {
           return null;
         }
       }).filter(item => item && item.id);
@@ -190,9 +192,9 @@ const extractPlaylistItems = (playlistUrl) => {
 
 const extractVideoInfo = (videoUrl, clientIndex = 0) => {
   return new Promise((resolve, reject) => {
-    // We add an extra null fallback to try without any player client specified
+
     const clientsToTry = [...PLAYER_CLIENTS, "none"];
-    
+
     if (clientIndex >= clientsToTry.length) {
       return reject(new Error("All player clients failed during video info extraction."));
     }
@@ -210,9 +212,7 @@ const extractVideoInfo = (videoUrl, clientIndex = 0) => {
       videoUrl
     ].flat();
 
-    const yt = spawn(YTDLP_PATH, args);
-
-
+    const yt = spawnYt(args);
 
     const timeout = setTimeout(() => {
       yt.kill("SIGKILL");
@@ -246,7 +246,7 @@ const extractVideoInfo = (videoUrl, clientIndex = 0) => {
       try {
         const info = JSON.parse(stdoutData.trim());
         resolve({ title: info.title, id: info.id });
-      } catch (e) {
+      } catch {
         reject(new Error("Failed to parse video info"));
       }
     });

@@ -9,7 +9,6 @@ const uploadToCloudinary = require("./uploadToCloudinary");
 
 const cloudinary = require("cloudinary").v2;
 
-// Track active downloads in memory: { userId: [{ id: 'youtubeId', title: 'Song Title', status: 'queued'|'downloading'|'uploading'|'done', url: '', color: '' }] }
 const activeDownloads = {};
 const isProcessingQueue = {};
 
@@ -23,24 +22,16 @@ const PALETTE = [
 
 function getRandomNeonColor() {
   const hex = PALETTE[Math.floor(Math.random() * PALETTE.length)];
-  return hex + "2E"; // Same transparency as the frontend picker logic
+  return hex + "2E";
 }
 
 function formatYoutubeTitle(rawTitle) {
   if (!rawTitle) return "Unknown Track";
 
-  // 1. Remove text inside parentheses, brackets, or angle brackets
-  // E.g., "(Official Video)", "[Lyric Video]", "<4K>"
   let title = rawTitle.replace(/[\[\(\<].*?[\]\)\>]/g, "");
-
-  // 2. Split by common delimiters and take the FIRST meaningful part.
-  // Common delimiters: ' | ', ' - ', ' // ', ' • ', ' · ', ' ~ '
-  // We use splits because usually the song title is the first thing,
-  // before the artist name or album name separated by these characters.
   const delimiters = /\||-|\/\/|•|·|~/;
   const parts = title.split(delimiters);
-  
-  // Try to find the first part that actually contains words
+
   let bestPart = parts[0];
   for (let part of parts) {
     if (part.trim().length > 0) {
@@ -49,10 +40,8 @@ function formatYoutubeTitle(rawTitle) {
     }
   }
 
-  // 3. Clean up leading/trailing whitespace and lingering quotes or commas
   title = bestPart.replace(/^["',]+|["',]+$/g, "").trim();
 
-  // If we accidentally erased everything, fall back to the original string sans brackets
   if (!title) {
     title = rawTitle.replace(/[\[\(\<].*?[\]\)\>]/g, "").trim() || "Unknown Track";
   }
@@ -72,12 +61,11 @@ const processUserQueue = async (userId) => {
 
   try {
     while (activeDownloads[userId] && activeDownloads[userId].length > 0) {
-      // Find next queued task
-      const taskIndex = activeDownloads[userId].findIndex(t => t.status === 'queued');
-      if (taskIndex === -1) break; // Nothing left to process
+      const taskIndex = activeDownloads[userId].findIndex(t => t.status === "queued");
+      if (taskIndex === -1) break;
 
       const task = activeDownloads[userId][taskIndex];
-      task.status = 'downloading';
+      task.status = "downloading";
 
       try {
         const { id: youtubeId, title, url: youtubeUrl, color } = task;
@@ -86,6 +74,7 @@ const processUserQueue = async (userId) => {
 
         if (existingSong) {
           const userSongExists = await UserSong.findOne({ user: userId, song: existingSong._id });
+
           if (!userSongExists) {
             await UserSong.create({
               user: userId,
@@ -94,14 +83,16 @@ const processUserQueue = async (userId) => {
               color: color || ""
             });
           }
-          // Remove from tracker after a slight delay so frontend sees it as 'done'
-          task.status = 'done';
+
+          task.status = "done";
+
           setTimeout(() => {
             if (activeDownloads[userId]) {
               activeDownloads[userId] = activeDownloads[userId].filter(t => t.id !== youtubeId);
             }
           }, 3000);
-          continue; 
+
+          continue;
         }
 
         const baseName = Date.now().toString() + "-" + Math.random().toString(36).substring(7);
@@ -116,12 +107,13 @@ const processUserQueue = async (userId) => {
 
         await extractAudio(youtubeUrl, localBase);
 
-        task.status = 'uploading';
+        task.status = "uploading";
+
         const uploadResult = await uploadToCloudinary(localFile);
         const audioUrl = uploadResult.secure_url;
         const cloudinaryId = uploadResult.public_id;
 
-        fs.promises.unlink(localFile).catch(() => { });
+        fs.promises.unlink(localFile).catch(() => {});
 
         const song = await Song.create({
           youtubeId,
@@ -136,8 +128,8 @@ const processUserQueue = async (userId) => {
           color: color || ""
         });
 
-        // Success — remove from active list after a small delay so frontend shows 'done' state
-        task.status = 'done';
+        task.status = "done";
+
         setTimeout(() => {
           if (activeDownloads[userId]) {
             activeDownloads[userId] = activeDownloads[userId].filter(t => t.id !== task.id);
@@ -146,14 +138,15 @@ const processUserQueue = async (userId) => {
 
       } catch (err) {
         console.error(`Failed to process queued song ${task.id}:`, err);
-        // Mark as failed so the frontend can show an error toast instead of a success toast.
-        // Keep it in the list briefly so the next poll sees status='failed', then remove it.
-        task.status = 'failed';
+
+        task.status = "failed";
+
         setTimeout(() => {
           if (activeDownloads[userId]) {
             activeDownloads[userId] = activeDownloads[userId].filter(t => t.id !== task.id);
           }
         }, 5000);
+
         continue;
       }
     }
@@ -164,18 +157,17 @@ const processUserQueue = async (userId) => {
 
 const enqueueDownload = (userId, youtubeId, title, url, color) => {
   if (!activeDownloads[userId]) activeDownloads[userId] = [];
-  
+
   if (!activeDownloads[userId].find(t => t.id === youtubeId)) {
     activeDownloads[userId].push({
       id: youtubeId,
       title: title || "Unknown Track",
       url,
       color,
-      status: 'queued'
+      status: "queued"
     });
   }
 
-  // Trigger processing if not already running
   processUserQueue(userId);
 };
 
@@ -191,36 +183,34 @@ const addSong = async (req, res) => {
 
     if (isPlaylist) {
       const items = await extractPlaylistItems(youtubeUrl);
-      
+
       if (!items || items.length === 0) {
         return res.status(400).json({ error: "Could not extract data from the playlist. Is it private or invalid?" });
       }
 
-      res.json({ 
+      res.json({
         message: `Playlist processing started! ${items.length} songs are being downloaded in the background.`
       });
 
-      // Background process to gather metadata and enqueue
       (async () => {
         for (const item of items) {
           if (!item.id || !item.title) continue;
-          
+
           const songTitle = formatYoutubeTitle(item.title);
           const songUrl = `https://www.youtube.com/watch?v=${item.id}`;
-          
+
           let songColor = color;
-          if (colorMode === 'random_all' || !color) {
+          if (colorMode === "random_all" || !color) {
             songColor = getRandomNeonColor();
           }
 
           enqueueDownload(req.userId, item.id, songTitle, songUrl, songColor);
         }
       })();
-      
+
       return;
     }
 
-    // Single Song Flow
     const youtubeId = extractYoutubeId(youtubeUrl);
 
     if (!youtubeId) {
@@ -233,7 +223,6 @@ const addSong = async (req, res) => {
       message: "Song processing started! It is downloading and adding to your library in the background."
     });
 
-    // Run in background so client doesn't hang fetching metadata
     (async () => {
       if (!finalTitle) {
         try {
@@ -246,7 +235,7 @@ const addSong = async (req, res) => {
       }
 
       let songColor = color;
-      if (colorMode === 'random' || !color) {
+      if (colorMode === "random" || !color) {
         songColor = getRandomNeonColor();
       }
 
@@ -260,9 +249,7 @@ const addSong = async (req, res) => {
 };
 
 const getSongs = async (req, res) => {
-
   try {
-
     const songs = await UserSong
       .find({ user: req.userId })
       .populate("song")
@@ -278,26 +265,17 @@ const getSongs = async (req, res) => {
 
     res.json(formattedSongs);
 
-  }
-
-  catch (err) {
-
+  } catch (err) {
     console.error("GET SONGS ERROR:", err);
 
     res.status(500).json({
       error: err.message
     });
-
   }
-
 };
 
-
-
 const deleteSong = async (req, res) => {
-
   try {
-
     const userSong = await UserSong.findById(req.params.id);
 
     if (!userSong) {
@@ -312,52 +290,37 @@ const deleteSong = async (req, res) => {
 
     await UserSong.findByIdAndDelete(req.params.id);
 
-
-
     const remaining = await UserSong.countDocuments({
       song: songId
     });
 
-
-
     if (remaining === 0) {
-
       const song = await Song.findById(songId);
 
       if (song) {
-
         await cloudinary.uploader.destroy(song.cloudinaryId, {
           resource_type: "video"
         });
 
         await Song.findByIdAndDelete(songId);
-
       }
-
     }
-
-
 
     res.json({ message: "Song removed from your library" });
 
-  }
-
-  catch (err) {
-
+  } catch (err) {
     console.error("DELETE ERROR:", err);
 
     res.status(500).json({
       error: err.message
     });
-
   }
-
 };
 
 const updateSong = async (req, res) => {
   try {
     const { id, title, color } = req.body;
-    
+
     if (!id) {
       return res.status(400).json({ error: "Song id is required" });
     }
@@ -374,7 +337,7 @@ const updateSong = async (req, res) => {
 
     if (title !== undefined) song.customTitle = title;
     if (color !== undefined) song.color = color;
-    
+
     await song.save();
 
     res.json({
@@ -407,7 +370,7 @@ const cancelDownload = (req, res) => {
     return res.status(404).json({ error: "Download not found" });
   }
 
-  if (task.status !== 'queued') {
+  if (task.status !== "queued") {
     return res.status(400).json({ error: "Cannot cancel a download that is already in progress" });
   }
 
@@ -423,8 +386,9 @@ const cancelAllDownloads = (req, res) => {
   }
 
   const before = activeDownloads[userId].length;
-  // Only remove queued items; let in-progress downloads finish
-  activeDownloads[userId] = activeDownloads[userId].filter(t => t.status !== 'queued');
+
+  activeDownloads[userId] = activeDownloads[userId].filter(t => t.status !== "queued");
+
   const removed = before - activeDownloads[userId].length;
 
   res.json({ message: `Removed ${removed} queued download(s)`, removed });
