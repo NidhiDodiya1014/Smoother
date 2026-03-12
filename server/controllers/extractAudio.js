@@ -22,6 +22,8 @@ const YTDLP_PATH = getYtDlpPath();
 // Fallback chain: tv_embedded works on server IPs without login,
 // ios and web are fallbacks if tv_embedded is also blocked.
 const PLAYER_CLIENTS = ["ios", "mweb", "web", "tv_embedded"];
+const COOKIES_FILE = "cookies.txt";
+
 
 const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
   return new Promise((resolve, reject) => {
@@ -48,7 +50,12 @@ const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
       args.splice(4, 0, "--extractor-args", `youtube:player_client=${client}`);
     }
 
+    if (fs.existsSync(COOKIES_FILE)) {
+      args.push("--cookies", COOKIES_FILE);
+    }
+
     console.log(`Running (client=${client}):`, YTDLP_PATH, args.join(" "));
+
 
     const yt = spawn(YTDLP_PATH, args);
 
@@ -103,7 +110,11 @@ const extractPlaylistItems = (playlistUrl) => {
     let stderrData = "";
 
     const args = ["--flat-playlist", "--dump-json", "--no-update", playlistUrl];
+    if (fs.existsSync(COOKIES_FILE)) {
+      args.push("--cookies", COOKIES_FILE);
+    }
     console.log("Running:", YTDLP_PATH, args.join(" "));
+
 
     const yt = spawn(YTDLP_PATH, args);
 
@@ -168,7 +179,12 @@ const extractVideoInfo = (videoUrl, clientIndex = 0) => {
       args.splice(3, 0, "--extractor-args", `youtube:player_client=${client}`);
     }
 
+    if (fs.existsSync(COOKIES_FILE)) {
+      args.push("--cookies", COOKIES_FILE);
+    }
+
     const yt = spawn(YTDLP_PATH, args);
+
 
     const timeout = setTimeout(() => {
       yt.kill("SIGKILL");

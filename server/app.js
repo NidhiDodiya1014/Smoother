@@ -6,6 +6,8 @@ const songRoutes = require("./routes/songRoutes");
 
 const app = express();
 
+app.set("trust proxy", true);
+
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:5173",
