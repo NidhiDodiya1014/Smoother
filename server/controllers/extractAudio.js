@@ -24,7 +24,6 @@ const BASE_YTDLP_ARGS = [
   "--no-cache-dir",
   "--geo-bypass",
   "--socket-timeout", "15",
-  "--playlist-items", "1",
   "--extractor-retries", "3",
   "--fragment-retries", "3",
   "--file-access-retries", "3",
