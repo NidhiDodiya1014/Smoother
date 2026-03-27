@@ -37,7 +37,10 @@ function Navbar() {
           to="/" 
           className="navbar-brand-custom" 
           style={{ display: 'flex', alignItems: 'center', gap: '12px' }}
-          onClick={() => window.dispatchEvent(new CustomEvent("resetHome"))}
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent("resetHome"));
+            setIsMenuOpen(false);
+          }}
         >
           <img src="/logo.png" alt="Smoother Logo" style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover', boxShadow: '0 0 15px rgba(139, 0, 255, 0.4)' }} />
           <div className="dancing-text-container">
@@ -69,8 +72,8 @@ function Navbar() {
 
             {!isAuthenticated && (
               <>
-                <Link to="/login" className="nav-link-custom">Login</Link>
-                <Link to="/register" className="nav-link-custom">Register</Link>
+                <Link to="/login" className="nav-link-custom" onClick={() => setIsMenuOpen(false)}>Login</Link>
+                <Link to="/register" className="nav-link-custom" onClick={() => setIsMenuOpen(false)}>Register</Link>
               </>
             )}
 
@@ -79,12 +82,15 @@ function Navbar() {
                 <Link 
                   to="/" 
                   className="nav-link-custom"
-                  onClick={() => window.dispatchEvent(new CustomEvent("resetHome"))}
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("resetHome"));
+                    setIsMenuOpen(false);
+                  }}
                 >
                   Home
                 </Link>
-                <Link to="/add-song" className="nav-link-custom">Add Song</Link>
-                <Link to="/current" className="nav-link-custom">My Queue</Link>
+                <Link to="/add-song" className="nav-link-custom" onClick={() => setIsMenuOpen(false)}>Add Song</Link>
+                <Link to="/current" className="nav-link-custom" onClick={() => setIsMenuOpen(false)}>My Queue</Link>
 
                 <button className="nav-link-custom" onClick={logout} style={{ marginRight: "12px" }}>
                   Logout

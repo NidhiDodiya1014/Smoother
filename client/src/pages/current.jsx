@@ -54,18 +54,7 @@ function Current() {
     }
   };
 
-  const handleProgressClick = (e) => {
-    if (!audioRef.current || !duration || currentIndex === null) return;
-    if (queue[currentIndex]?.id !== currentSong?.id) return;
 
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const percentage = clickX / rect.width;
-    const newTime = percentage * duration;
-
-    audioRef.current.currentTime = newTime;
-    setCurrentTime(newTime);
-  };
 
   const formatTime = (seconds) => {
     if (!seconds || isNaN(seconds)) return "0:00";
@@ -165,14 +154,24 @@ function Current() {
             </div>
 
             <div className="progress-container">
-              <div className="progress-bar-wrapper" onClick={handleProgressClick}>
-                <div
-                  className="progress-bar-fill"
-                  style={{
-                    width: `${duration ? (currentTime / duration) * 100 : 0}%`
-                  }}
-                />
-              </div>
+              <input
+                type="range"
+                min="0"
+                max={duration || 100}
+                value={currentTime || 0}
+                step="0.01"
+                className="slider slider-progress"
+                onChange={(e) => {
+                  const newTime = parseFloat(e.target.value);
+                  if (audioRef.current && queue[currentIndex]?.id === currentSong?.id) {
+                    audioRef.current.currentTime = newTime;
+                    setCurrentTime(newTime);
+                  }
+                }}
+                style={{
+                  background: `linear-gradient(to right, var(--text-primary) ${duration ? (currentTime / duration) * 100 : 0}%, rgba(255, 255, 255, 0.1) ${duration ? (currentTime / duration) * 100 : 0}%)`
+                }}
+              />
 
               <div className="progress-time">
                 <span>{formatTime(currentTime)}</span>

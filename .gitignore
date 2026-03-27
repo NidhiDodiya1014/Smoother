@@ -9,4 +9,5 @@ server/songs/*.webm
 server/.ffmpeg-bin/
 server/yt-dlp
 client/dist/
-
+refresh_cookies.sh
+bash
