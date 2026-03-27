@@ -404,7 +404,7 @@ function Home() {
             <span style={{ color: "var(--text-secondary)", fontSize: "1.2rem" }}>🔊</span>
           </div>
 
-          <div style={{ display: "flex", gap: "12px", marginTop: "40px", justifyContent: "center" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "32px", justifyContent: "center" }}>
               <button
                 className="btn-small btn-danger"
                 disabled={processing}
