@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import API from "../config/api";
 import { useToast } from "../contexts/ToastContext";
 import { useNavigate } from "react-router-dom";
+import { getCacheSize, clearAllCache, formatBytes } from "../utils/offlineCache";
 
 function Profile() {
   const { showToast, showRawToast } = useToast();
@@ -16,9 +17,11 @@ function Profile() {
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [cacheInfo, setCacheInfo] = useState({ size: 0, count: 0 });
 
   useEffect(() => {
     fetchProfile();
+    getCacheSize().then(info => setCacheInfo(info));
   }, []);
 
   const fetchProfile = async () => {
@@ -200,6 +203,36 @@ function Profile() {
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Offline Storage */}
+          <div>
+            <label style={{ display: "block", color: "var(--text-secondary)", marginBottom: "8px", fontSize: "0.9rem" }}>Offline Storage</label>
+            <div style={{ background: "rgba(255,255,255,0.05)", padding: "12px 16px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <span style={{ fontSize: "1.1rem", color: "var(--text-primary)" }}>
+                    {cacheInfo.count} song{cacheInfo.count !== 1 ? "s" : ""}
+                  </span>
+                  <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginLeft: "8px" }}>
+                    ({formatBytes(cacheInfo.size)})
+                  </span>
+                </div>
+                {cacheInfo.count > 0 && (
+                  <button
+                    className="btn-small btn-outline-neon"
+                    style={{ padding: "4px 12px", border: "none", color: "#ef4444" }}
+                    onClick={() => {
+                      clearAllCache();
+                      setCacheInfo({ size: 0, count: 0 });
+                      showRawToast("Offline songs cleared");
+                    }}
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
         </div>

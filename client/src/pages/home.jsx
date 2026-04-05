@@ -3,6 +3,7 @@ import API from "../config/api";
 import { useAudio } from "../contexts/AudioContext";
 import { useQueue } from "../contexts/QueueContext";
 import { useLocation } from "react-router-dom";
+import { cacheSong, uncacheSong, getCachedUrls, onSWMessage } from "../utils/offlineCache";
 
 function Home() {
   const location = useLocation();
@@ -23,6 +24,8 @@ function Home() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkColorPicking, setBulkColorPicking] = useState(false);
+  const [cachedUrls, setCachedUrls] = useState([]);
+  const [cachingUrl, setCachingUrl] = useState(null);
 
   const PALETTE_GRID = [
     ["#de677c", "#9463ae", "#4d7acd", "#2cb8e9", "#4ef4f5", "#a6fed5", "#fedbaa", "#d85b7e"],
@@ -48,6 +51,22 @@ function Home() {
   useEffect(() => {
     loadSongs();
 
+    // Load cached URLs
+    getCachedUrls().then(urls => setCachedUrls(urls));
+
+    // Listen for SW cache events
+    const cleanup = onSWMessage((event) => {
+      if (event.data.type === "AUDIO_CACHED") {
+        setCachedUrls(prev => [...prev, event.data.url]);
+        setCachingUrl(null);
+      } else if (event.data.type === "AUDIO_UNCACHED") {
+        setCachedUrls(prev => prev.filter(u => u !== event.data.url));
+      } else if (event.data.type === "CACHE_ERROR") {
+        setCachingUrl(null);
+      } else if (event.data.type === "ALL_CACHE_CLEARED") {
+        setCachedUrls([]);
+      }
+    });
     const handleReset = () => {
       setExpandedSong(null);
       setAutoPlay(false);
@@ -56,7 +75,10 @@ function Home() {
     };
     
     window.addEventListener("resetHome", handleReset);
-    return () => window.removeEventListener("resetHome", handleReset);
+    return () => {
+      window.removeEventListener("resetHome", handleReset);
+      cleanup();
+    };
   }, []);
 
   useEffect(() => {
@@ -498,6 +520,32 @@ function Home() {
             >
               {buttonGreenQueueIds.includes(expandedSong.id) ? "✓ Added" : "+ Queue"}
             </button>
+
+            {expandedSong.audioUrl && (
+              <button
+                className="btn-small btn-outline-neon"
+                style={{
+                  color: cachedUrls.includes(expandedSong.audioUrl) ? "#10b981" : "#a78bfa",
+                  borderColor: cachedUrls.includes(expandedSong.audioUrl) ? "#10b981" : "#a78bfa"
+                }}
+                disabled={cachingUrl === expandedSong.audioUrl}
+                onClick={() => {
+                  if (cachedUrls.includes(expandedSong.audioUrl)) {
+                    uncacheSong(expandedSong.audioUrl);
+                  } else {
+                    setCachingUrl(expandedSong.audioUrl);
+                    cacheSong(expandedSong.audioUrl);
+                  }
+                }}
+              >
+                {cachingUrl === expandedSong.audioUrl
+                  ? "Saving..."
+                  : cachedUrls.includes(expandedSong.audioUrl)
+                    ? "✓ Offline"
+                    : "📥 Save Offline"
+                }
+              </button>
+            )}
           </div>
 
           {pickingColorFor === expandedSong.id && (
@@ -735,6 +783,13 @@ function Home() {
                   {addedToQueueIds.includes(song.id) && (
                     <div className="added-message" style={{ color: "#10b981", fontSize: "11px", fontWeight: "600", marginTop: "4px" }}>
                       ✓ Added to Queue
+                    </div>
+                  )}
+
+                  {cachedUrls.includes(song.audioUrl) && (
+                    <div style={{ color: "#a78bfa", fontSize: "10px", fontWeight: "600", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#a78bfa", display: "inline-block" }}></span>
+                      Offline
                     </div>
                   )}
                 </div>

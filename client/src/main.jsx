@@ -8,6 +8,7 @@ import App from './App.jsx';
 
 import { AudioProvider } from './contexts/AudioContext';
 import { QueueProvider } from './contexts/QueueContext';
+import { registerServiceWorker } from './utils/offlineCache';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -18,3 +19,6 @@ createRoot(document.getElementById('root')).render(
     </QueueProvider>
   </StrictMode>
 );
+
+// Register service worker for offline caching
+registerServiceWorker();
