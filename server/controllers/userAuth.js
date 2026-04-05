@@ -66,6 +66,40 @@ const login = async (req, res) => {
         console.error("LOGIN ERROR:", e);
         res.status(500).json({ message: e.message })
     }
-}
+};
 
-module.exports = { register, login };
+const getProfile = async (req, res) => {
+    try {
+        const user = await User.findById(req.userId).select("-password -__v");
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+        res.json(user);
+    } catch (e) {
+        console.error("GET PROFILE ERROR:", e);
+        res.status(500).json({ message: e.message });
+    }
+};
+
+const updateProfile = async (req, res) => {
+    try {
+        const { name, password } = req.body;
+        const user = await User.findById(req.userId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (name) user.name = name;
+        if (password) {
+            user.password = await bcrypt.hash(password, 10);
+        }
+
+        await user.save();
+        res.json({ message: "Profile updated successfully", user: { name: user.name, email: user.email } });
+    } catch (e) {
+        console.error("UPDATE PROFILE ERROR:", e);
+        res.status(500).json({ message: e.message });
+    }
+};
+
+module.exports = { register, login, getProfile, updateProfile };

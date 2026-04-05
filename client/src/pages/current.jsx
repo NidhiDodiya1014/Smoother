@@ -50,7 +50,9 @@ function Current() {
     if (currentIndex !== null && currentSong?.id === queue[currentIndex]?.id) {
       togglePlayPause();
     } else {
-      setCurrentIndex(0);
+      const newIndex = currentIndex !== null && queue[currentIndex] ? currentIndex : 0;
+      playSong(queue[newIndex], true);
+      setCurrentIndex(newIndex);
     }
   };
 
@@ -105,7 +107,10 @@ function Current() {
                     onClick={(e) => {
                       e.stopPropagation();
                       if (isThisSongCurrent) togglePlayPause();
-                      else setCurrentIndex(index);
+                      else {
+                        playSong(song, true);
+                        setCurrentIndex(index);
+                      }
                     }}
                   >
                     {isThisSongPlaying ? "⏸" : "▶"}

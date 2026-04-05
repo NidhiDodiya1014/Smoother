@@ -11,6 +11,7 @@ function Home() {
   const [songs, setSongs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [expandedSong, setExpandedSong] = useState(null);
   const [autoPlay, setAutoPlay] = useState(false);
   const [addedToQueueIds, setAddedToQueueIds] = useState([]);
@@ -226,6 +227,33 @@ function Home() {
     }
   };
 
+  const bulkDownload = () => {
+    const selectedSongs = songs.filter(s => selectedIds.includes(s.id));
+    selectedSongs.forEach((song, i) => {
+      setTimeout(() => {
+        const safeTitle = song.title.replace(/[^a-zA-Z0-9\s_\-\(\)\[\]]/g, '').trim().replace(/\s+/g, '_');
+        const url = song.audioUrl ? song.audioUrl.replace('/upload/', `/upload/fl_attachment:${safeTitle}/`) : '#';
+        if (url !== '#') {
+          const iframe = document.createElement("iframe");
+          iframe.style.display = "none";
+          iframe.src = url;
+          document.body.appendChild(iframe);
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          }, 10000);
+        }
+      }, i * 300);
+    });
+    setSelectMode(false);
+    setSelectedIds([]);
+  };
+
+  const filteredSongs = songs.filter((song) => 
+    song.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   if (expandedSong) {
     const isExpandedSongPlaying =
       currentSong?.id === expandedSong.id && isPlaying;
@@ -414,9 +442,18 @@ function Home() {
               </button>
 
               <a
-                href={expandedSong.audioUrl ? expandedSong.audioUrl.replace('/upload/', '/upload/fl_attachment/') : '#'}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={
+                  expandedSong.audioUrl
+                    ? expandedSong.audioUrl.replace(
+                        '/upload/',
+                        `/upload/fl_attachment:${expandedSong.title
+                          .replace(/[^a-zA-Z0-9\s_\-\(\)\[\]]/g, '')
+                          .trim()
+                          .replace(/\s+/g, '_')}/`
+                      )
+                    : '#'
+                }
+                download={`${expandedSong.title}.mp3`}
                 className="btn-small btn-outline-neon"
                 style={{ color: "var(--accent-cyan)", borderColor: "var(--accent-cyan)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "6px" }}
               >
@@ -502,8 +539,25 @@ function Home() {
 
   return (
     <div className="page-container">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "8px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "20px" }}>
         <h1 className="page-title text-gradient" style={{ margin: 0 }}>My Songs</h1>
+        
+        {songs.length > 0 && (
+          <div style={{ position: "relative", flex: "1 1 200px", maxWidth: "300px" }}>
+            <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)" }}>
+              🔍
+            </span>
+            <input 
+              type="text" 
+              className="input-neon" 
+              placeholder="Search library..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ paddingLeft: "36px", margin: 0, background: "rgba(0,0,0,0.4)" }}
+            />
+          </div>
+        )}
+
         {songs.length > 0 && (
           <button
             className="btn-small btn-outline-neon"
@@ -519,7 +573,7 @@ function Home() {
         )}
       </div>
 
-      {selectMode && selectedIds.length > 0 && (
+      {selectMode && (
         <div style={{
           display: "flex",
           alignItems: "center",
@@ -531,22 +585,47 @@ function Home() {
           marginBottom: "24px",
           flexWrap: "wrap"
         }}>
-          <span style={{ color: "var(--text-secondary)", fontSize: "0.9rem", flexGrow: 1 }}>{selectedIds.length} song{selectedIds.length > 1 ? 's' : ''} selected</span>
-          <button
-            className="btn-small"
-            style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444" }}
-            disabled={processing}
-            onClick={bulkDelete}
-          >
-            {processing ? "Deleting..." : "🗑 Delete All"}
-          </button>
+          <span style={{ color: "var(--text-secondary)", fontSize: "0.9rem", flexGrow: 1 }}>{selectedIds.length} song{selectedIds.length !== 1 ? 's' : ''} selected</span>
           <button
             className="btn-small btn-outline-neon"
             style={{ color: "var(--accent-cyan)", borderColor: "var(--accent-cyan)" }}
-            onClick={() => setBulkColorPicking(v => !v)}
+            onClick={() => {
+              if (selectedIds.length === songs.length && songs.length > 0) {
+                setSelectedIds([]);
+              } else {
+                setSelectedIds(songs.map(s => s.id));
+              }
+            }}
           >
-            🎨 Change Color
+            {selectedIds.length === songs.length && songs.length > 0 ? "☐ Deselect All" : "☑ Select All"}
           </button>
+          
+          {selectedIds.length > 0 && (
+            <>
+              <button
+                className="btn-small btn-outline-neon"
+                style={{ color: "var(--accent-cyan)", borderColor: "var(--accent-cyan)" }}
+                onClick={bulkDownload}
+              >
+                ⬇ Download All
+              </button>
+              <button
+                className="btn-small btn-outline-neon"
+                style={{ color: "var(--accent-cyan)", borderColor: "var(--accent-cyan)" }}
+                onClick={() => setBulkColorPicking(v => !v)}
+              >
+                🎨 Change Color
+              </button>
+              <button
+                className="btn-small"
+                style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444" }}
+                disabled={processing}
+                onClick={bulkDelete}
+              >
+                {processing ? "Deleting..." : "🗑 Delete All"}
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -591,9 +670,15 @@ function Home() {
         </div>
       )}
 
-      {!loading && songs.length > 0 && (
+      {!loading && songs.length > 0 && filteredSongs.length === 0 && (
+        <div className="empty-state">
+          <p>No matches found for "{searchQuery}".</p>
+        </div>
+      )}
+
+      {!loading && filteredSongs.length > 0 && (
         <div className="song-grid">
-          {songs.map((song) => {
+          {filteredSongs.map((song) => {
             const isCardPlaying = currentSong?.id === song.id && isPlaying;
 
             const handleCardClick = (e) => {

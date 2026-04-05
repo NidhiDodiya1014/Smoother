@@ -14,7 +14,7 @@ export default function AddSong() {
   const [isLoading, setIsLoading] = useState(false);
   const [activeDownloads, setActiveDownloads] = useState([]);
 
-  const { addToast } = useToast();
+  const { showToast: addToast } = useToast();
   const navigate = useNavigate();
   const prevDownloadsRef = useRef([]);
   // Track whether a session was ever started (to avoid redirecting on first load)

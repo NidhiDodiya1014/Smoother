@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import API from "../config/api";
 
 function Register() {
@@ -37,7 +37,7 @@ function Register() {
       setSuccess("Registration successful! Redirecting to home...");
 
       setTimeout(() => {
-        navigate("/");
+        window.location.href = "/";
       }, 1200);
 
     } catch (err) {
@@ -109,6 +109,10 @@ function Register() {
             {loading ? "Registering..." : "Sign Up"}
           </button>
         </form>
+
+        <div style={{ marginTop: "24px", textAlign: "center", fontSize: "0.95rem", color: "var(--text-secondary)" }}>
+          Already a user? <Link to="/login" style={{ color: "var(--accent-cyan)", textDecoration: "none", fontWeight: "600" }}>Login here</Link>
+        </div>
       </div>
     </div>
   );

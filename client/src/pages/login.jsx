@@ -1,6 +1,6 @@
 import { useState } from "react";
 import API from "../config/api";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -25,7 +25,7 @@ export default function Login() {
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("userName", res.data.user.name);
 
-      navigate("/");
+      window.location.href = "/";
     } catch (err) {
       setError(err.response?.data?.message || "Invalid email or password");
     } finally {
@@ -67,6 +67,10 @@ export default function Login() {
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
+
+        <div style={{ marginTop: "24px", textAlign: "center", fontSize: "0.95rem", color: "var(--text-secondary)" }}>
+          New to Smoother? <Link to="/register" style={{ color: "var(--accent-cyan)", textDecoration: "none", fontWeight: "600" }}>Register here</Link>
+        </div>
       </div>
     </div>
   );

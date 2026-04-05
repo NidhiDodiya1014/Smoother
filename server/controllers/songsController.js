@@ -118,7 +118,8 @@ const processUserQueue = async (userId) => {
         const song = await Song.create({
           youtubeId,
           audioUrl,
-          cloudinaryId
+          cloudinaryId,
+          originalTitle: title
         });
 
         await UserSong.create({

@@ -59,7 +59,7 @@ function ToastStack({ toasts }) {
               textOverflow: "ellipsis"
             }}
           >
-            {isError ? `✕ Failed to download "${toast.message}"` : `✓ "${toast.message}" added`}
+            {isError ? `✕ Failed to download "${toast.message}"` : (toast.type === "raw" ? `✓ ${toast.message}` : `✓ "${toast.message}" added`)}
           </div>
         );
       })}
@@ -68,5 +68,9 @@ function ToastStack({ toasts }) {
 }
 
 export function useToast() {
-  return useContext(ToastContext);
+  const ctx = useContext(ToastContext);
+  return {
+    showToast: ctx.addToast,
+    showRawToast: (message) => ctx.addToast(message, "raw")
+  };
 }

@@ -12,7 +12,7 @@ function GlobalPlayer() {
 
   const isFromQueue =
     currentIndex !== null &&
-    queue[currentIndex]?._id === currentSong._id;
+    queue[currentIndex]?.id === currentSong.id;
 
   const handleStop = () => {
     stopSong(() => setCurrentIndex(null));

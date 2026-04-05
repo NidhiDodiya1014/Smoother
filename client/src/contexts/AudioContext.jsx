@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useRef, useEffect } from "react";
+import { createContext, useContext, useState, useRef, useEffect, useCallback } from "react";
 import { useQueue } from "./QueueContext";
 
 const AudioContext = createContext();
@@ -28,6 +28,8 @@ export const AudioProvider = ({ children }) => {
   const [duration, setDuration] = useState(0);
 
   const audioRef = useRef(null);
+  const wasPlayingBeforeInterrupt = useRef(false);
+  const userPausedRef = useRef(false);
 
   useEffect(() => {
     if (currentSong)
@@ -49,6 +51,168 @@ export const AudioProvider = ({ children }) => {
       setIsPlaying(true);
     }
   }, [currentIndex, queue]);
+
+  // ── Media Session API (lock screen controls + background playback) ──
+  const updateMediaSession = useCallback((song) => {
+    if (!("mediaSession" in navigator) || !song) return;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: song.title || "Unknown",
+      artist: "Smoother",
+      album: "My Library",
+      artwork: [
+        { src: "/logo.png", sizes: "192x192", type: "image/png" },
+        { src: "/logo.png", sizes: "512x512", type: "image/png" }
+      ]
+    });
+  }, []);
+
+  // Update media session whenever current song changes
+  useEffect(() => {
+    updateMediaSession(currentSong);
+  }, [currentSong, updateMediaSession]);
+
+  // Set up media session action handlers
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+
+    const actionHandlers = {
+      play: () => {
+        const audio = audioRef.current;
+        if (audio) {
+          audio.play().catch(() => {});
+          setIsPlaying(true);
+          userPausedRef.current = false;
+        }
+      },
+      pause: () => {
+        const audio = audioRef.current;
+        if (audio) {
+          audio.pause();
+          setIsPlaying(false);
+          userPausedRef.current = true;
+        }
+      },
+      previoustrack: () => {
+        const audio = audioRef.current;
+        if (audio) {
+          audio.currentTime = Math.max(0, audio.currentTime - 10);
+        }
+      },
+      nexttrack: () => {
+        if (currentIndex !== null && currentIndex + 1 < queue.length) {
+          setCurrentIndex(currentIndex + 1);
+        }
+      },
+      seekbackward: (details) => {
+        const audio = audioRef.current;
+        if (audio) {
+          audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset || 10));
+        }
+      },
+      seekforward: (details) => {
+        const audio = audioRef.current;
+        if (audio) {
+          audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (details.seekOffset || 10));
+        }
+      },
+      seekto: (details) => {
+        const audio = audioRef.current;
+        if (audio && details.seekTime !== undefined) {
+          audio.currentTime = details.seekTime;
+          setCurrentTime(details.seekTime);
+        }
+      }
+    };
+
+    for (const [action, handler] of Object.entries(actionHandlers)) {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch (e) {
+        // Some actions may not be supported
+      }
+    }
+
+    return () => {
+      for (const action of Object.keys(actionHandlers)) {
+        try {
+          navigator.mediaSession.setActionHandler(action, null);
+        } catch (e) {}
+      }
+    };
+  }, [currentIndex, queue.length, setCurrentIndex]);
+
+  // ── Auto-resume after phone call / interruption ──
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      const audio = audioRef.current;
+      if (!audio || !currentSong) return;
+
+      if (document.hidden) {
+        // Page going to background — remember if we were playing
+        wasPlayingBeforeInterrupt.current = !audio.paused;
+      } else {
+        // Page coming back to foreground — resume if we were playing and user didn't manually pause
+        if (wasPlayingBeforeInterrupt.current && !userPausedRef.current) {
+          setTimeout(() => {
+            if (audio.paused && !userPausedRef.current) {
+              audio.play().catch(() => {});
+              setIsPlaying(true);
+            }
+          }, 300);
+        }
+      }
+    };
+
+    // Handle audio interruption (phone call pauses audio externally)
+    const handleAudioPause = () => {
+      // If audio was paused but our state says it should be playing,
+      // it was an external interruption (phone call, etc.)
+      if (isPlaying && !userPausedRef.current) {
+        wasPlayingBeforeInterrupt.current = true;
+      }
+    };
+
+    const handleAudioPlay = () => {
+      wasPlayingBeforeInterrupt.current = false;
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    
+    const audio = audioRef.current;
+    if (audio) {
+      audio.addEventListener("pause", handleAudioPause);
+      audio.addEventListener("play", handleAudioPlay);
+    }
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (audio) {
+        audio.removeEventListener("pause", handleAudioPause);
+        audio.removeEventListener("play", handleAudioPlay);
+      }
+    };
+  }, [currentSong, isPlaying]);
+
+  // Update media session playback state
+  useEffect(() => {
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+    }
+  }, [isPlaying]);
+
+  // Update media session position state
+  useEffect(() => {
+    if ("mediaSession" in navigator && duration > 0) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: duration,
+          playbackRate: 1,
+          position: Math.min(currentTime, duration)
+        });
+      } catch (e) {}
+    }
+  }, [currentTime, duration]);
 
   const hasLoadedInitially = useRef(false);
 
@@ -108,6 +272,10 @@ export const AudioProvider = ({ children }) => {
           setCurrentSong(null);
           setIsPlaying(false);
         }
+      } else {
+        // Song completed and not playing from queue
+        setCurrentSong(null);
+        setIsPlaying(false);
       }
     };
 
@@ -142,6 +310,7 @@ export const AudioProvider = ({ children }) => {
   }, [currentSong, isPlaying]);
 
   const playSong = (song, autoPlay = false) => {
+    userPausedRef.current = false;
     setCurrentSong(song);
     setIsPlaying(autoPlay);
   };
@@ -153,9 +322,11 @@ export const AudioProvider = ({ children }) => {
     if (audio.paused) {
       audio.play().catch(() => {});
       setIsPlaying(true);
+      userPausedRef.current = false;
     } else {
       audio.pause();
       setIsPlaying(false);
+      userPausedRef.current = true;
     }
   };
 
@@ -167,6 +338,7 @@ export const AudioProvider = ({ children }) => {
       audio.currentTime = 0;
     }
 
+    userPausedRef.current = true;
     setCurrentSong(null);
     setIsPlaying(false);
     setCurrentTime(0);

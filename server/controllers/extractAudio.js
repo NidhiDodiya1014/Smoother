@@ -17,6 +17,7 @@ const YTDLP_PATH = getYtDlpPath();
 const PLAYER_CLIENTS = ["android", "ios", "android_music", "mweb", "web", "tv_embedded", "web_safari"];
 
 const COOKIES_FILE = path.join(__dirname, "../cookies.txt");
+const FFMPEG_LOCATION = path.join(__dirname, "../.ffmpeg-bin");
 
 const BASE_YTDLP_ARGS = [
   "--no-update",
@@ -31,7 +32,8 @@ const BASE_YTDLP_ARGS = [
   "--sleep-requests", "1",
   "--sleep-interval", "1",
   "--max-sleep-interval", "3",
-  "--js-runtimes", "node"
+  "--js-runtimes", "node",
+  "--ffmpeg-location", FFMPEG_LOCATION
 ];
 
 const getClientArgs = (client) => {
@@ -244,7 +246,29 @@ const extractVideoInfo = (videoUrl, clientIndex = 0) => {
 
       try {
         const info = JSON.parse(stdoutData.trim());
-        resolve({ title: info.title, id: info.id });
+        let finalTitle = info.title;
+        
+        if (info.track) {
+          finalTitle = info.artist ? `${info.artist} - ${info.track}` : info.track;
+        } else {
+          finalTitle = finalTitle
+            .replace(/\[.*?\]/g, "")
+            .replace(/\(Official.*?\)/gi, "")
+            .replace(/\(Lyric.*?\)/gi, "")
+            .replace(/\(Music Video\)/gi, "")
+            .replace(/\(Audio\)/gi, "")
+            .replace(/\|.*/, "")
+            .trim();
+          
+          if (finalTitle.endsWith("-")) {
+            finalTitle = finalTitle.slice(0, -1).trim();
+          }
+        }
+        
+        // Ensure we have a fallback if title gets completely stripped
+        if (!finalTitle) finalTitle = info.title;
+
+        resolve({ title: finalTitle, id: info.id });
       } catch {
         reject(new Error("Failed to parse video info"));
       }

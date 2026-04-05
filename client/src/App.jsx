@@ -8,6 +8,7 @@ import Current from "./pages/current";
 import GlobalPlayer from "./components/GlobalPlayer";
 import Login from "./pages/login";
 import Register from "./pages/register";
+import Profile from "./pages/profile";
 import { ToastProvider } from "./contexts/ToastContext";
 
 const isAuthenticated = () => {
@@ -39,6 +40,11 @@ function App() {
           <Route
             path="/current"
             element={isAuthenticated() ? <Current /> : <Navigate to="/login" />}
+          />
+
+          <Route
+            path="/profile"
+            element={isAuthenticated() ? <Profile /> : <Navigate to="/login" />}
           />
 
         </Routes>
