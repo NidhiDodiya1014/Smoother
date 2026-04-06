@@ -305,7 +305,7 @@ function Home() {
             position: "relative",
             overflow: "hidden",
             background: expandedSong.color && expandedSong.color !== "#15151a" 
-              ? `linear-gradient(135deg, ${expandedSong.color.substring(0, 7)}33 0%, rgba(20, 20, 25, 0.6) 100%)` 
+              ? `linear-gradient(135deg, ${expandedSong.color.substring(0, 7)}33 0%, var(--player-gradient-end, rgba(20, 20, 25, 0.6)) 100%)` 
               : undefined,
             borderTopColor: expandedSong.color && expandedSong.color !== "#15151a" 
               ? `${expandedSong.color.substring(0, 7)}66`
@@ -316,7 +316,7 @@ function Home() {
             <div style={{
               position: "absolute",
               top: 0, left: 0, right: 0, bottom: 0,
-              background: "rgba(15, 15, 20, 0.85)",
+              background: "var(--modal-bg-special, rgba(15, 15, 20, 0.85))",
               backdropFilter: "blur(8px)",
               display: "flex",
               flexDirection: "column",
@@ -402,7 +402,9 @@ function Home() {
                 }
               }}
             >
-              ⏮
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+              </svg>
             </button>
 
             <button
@@ -415,7 +417,15 @@ function Home() {
                 }
               }}
             >
-              {isExpandedSongPlaying ? "⏸" : "▶"}
+              {isExpandedSongPlaying ? (
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                </svg>
+              ) : (
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              )}
             </button>
 
             <button
@@ -427,12 +437,18 @@ function Home() {
                 }
               }}
             >
-              ⏭
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+              </svg>
             </button>
           </div>
 
           <div className="volume-control">
-            <span style={{ color: "var(--text-secondary)", fontSize: "1.2rem" }}>🔉</span>
+            <span style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center" }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/>
+              </svg>
+            </span>
             <input
               type="range"
               min="0"
@@ -451,7 +467,11 @@ function Home() {
                 background: `linear-gradient(to right, var(--text-secondary) ${volume * 100}%, rgba(255, 255, 255, 0.1) ${volume * 100}%)`
               }}
             />
-            <span style={{ color: "var(--text-secondary)", fontSize: "1.2rem" }}>🔊</span>
+            <span style={{ color: "var(--text-secondary)", display: "flex", alignItems: "center" }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+              </svg>
+            </span>
           </div>
 
           <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "32px", justifyContent: "center" }}>
@@ -592,16 +612,19 @@ function Home() {
         
         {songs.length > 0 && (
           <div style={{ position: "relative", flex: "1 1 200px", maxWidth: "300px" }}>
-            <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)" }}>
-              🔍
+            <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)", display: "flex", alignItems: "center" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
             </span>
             <input 
               type="text" 
-              className="input-neon" 
+              className="input-neon search-input-custom" 
               placeholder="Search library..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ paddingLeft: "36px", margin: 0, background: "rgba(0,0,0,0.4)" }}
+              style={{ paddingLeft: "36px", margin: 0 }}
             />
           </div>
         )}
@@ -800,7 +823,15 @@ function Home() {
                     style={{ width: "40px", height: "40px" }}
                     onClick={handlePlayPause}
                   >
-                    {isCardPlaying ? "⏸" : "▶"}
+                    {isCardPlaying ? (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                      </svg>
+                    ) : (
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z"/>
+                      </svg>
+                    )}
                   </button>
 
                   <button

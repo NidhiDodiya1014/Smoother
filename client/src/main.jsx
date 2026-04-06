@@ -8,15 +8,18 @@ import App from './App.jsx';
 
 import { AudioProvider } from './contexts/AudioContext';
 import { QueueProvider } from './contexts/QueueContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { registerServiceWorker } from './utils/offlineCache';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <QueueProvider>
-      <AudioProvider>
-        <App />
-      </AudioProvider>
-    </QueueProvider>
+    <ThemeProvider>
+      <QueueProvider>
+        <AudioProvider>
+          <App />
+        </AudioProvider>
+      </QueueProvider>
+    </ThemeProvider>
   </StrictMode>
 );
 

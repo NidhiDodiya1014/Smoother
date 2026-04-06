@@ -298,12 +298,44 @@ export const AudioProvider = ({ children }) => {
 
     if (currentSongRef.current !== currentSong.id) {
       audio.src = currentSong.audioUrl;
-      audio.load();
       currentSongRef.current = currentSong.id;
+
+      // One-time handler: seek to saved position, then play if needed
+      const onReady = () => {
+        audio.removeEventListener("loadeddata", onReady);
+
+        if (!hasLoadedInitially.current) {
+          const savedTime = parseFloat(localStorage.getItem("currentTime") || "0");
+          if (savedTime > 0 && savedTime < audio.duration) {
+            audio.currentTime = savedTime;
+          }
+          hasLoadedInitially.current = true;
+        }
+
+        if (isPlaying) {
+          audio.play().catch(() => {
+            const once = () => {
+              audio.play().catch(() => {});
+              document.removeEventListener("pointerdown", once);
+            };
+            document.addEventListener("pointerdown", once);
+          });
+        }
+      };
+
+      audio.addEventListener("loadeddata", onReady);
+      audio.load();
+      return;
     }
 
     if (isPlaying) {
-      audio.play().catch(() => {});
+      audio.play().catch(() => {
+        const once = () => {
+          audio.play().catch(() => {});
+          document.removeEventListener("pointerdown", once);
+        };
+        document.addEventListener("pointerdown", once);
+      });
     } else {
       audio.pause();
     }

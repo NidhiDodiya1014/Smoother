@@ -9,6 +9,7 @@ import GlobalPlayer from "./components/GlobalPlayer";
 import Login from "./pages/login";
 import Register from "./pages/register";
 import Profile from "./pages/profile";
+import AmbientBackground from "./components/AmbientBackground";
 import { ToastProvider } from "./contexts/ToastContext";
 
 const isAuthenticated = () => {
@@ -20,6 +21,7 @@ function App() {
     <ToastProvider>
       <Router>
 
+        <AmbientBackground />
         <Navbar />
 
         <Routes>

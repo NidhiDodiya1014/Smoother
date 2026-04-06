@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../config/api";
 import { useToast } from "../contexts/ToastContext";
+import Confetti from "../components/Confetti";
 
 export default function AddSong() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -13,6 +14,7 @@ export default function AddSong() {
   const [success, setSuccess] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [activeDownloads, setActiveDownloads] = useState([]);
+  const [confettiTrigger, setConfettiTrigger] = useState(0);
 
   const { showToast: addToast } = useToast();
   const navigate = useNavigate();
@@ -45,6 +47,7 @@ export default function AddSong() {
           } else {
             // Disappeared without a failed status → successfully saved to DB
             addToast(t.title, "success");
+            setConfettiTrigger(prev => prev + 1);
           }
         });
 
@@ -182,6 +185,7 @@ export default function AddSong() {
 
   return (
     <div className="page-container" style={{ display: "flex", justifyContent: "center", gap: "32px", alignItems: "flex-start", flexWrap: "wrap" }}>
+      <Confetti trigger={confettiTrigger} />
       <div style={{ maxWidth: "640px", width: "100%", flex: "1 1 500px" }}>
         <h1 className="page-title text-gradient">Add a Track</h1>
 
@@ -251,7 +255,7 @@ export default function AddSong() {
               {!isPlaylistUrl ? (
                 // Single Song Color Options
                 <div style={{ display: "flex", gap: "16px", marginBottom: "12px" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", color: "#fff", cursor: "pointer" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-primary)", cursor: "pointer" }}>
                     <input 
                       type="radio" 
                       name="colorMode" 
@@ -262,7 +266,7 @@ export default function AddSong() {
                     />
                     Random Color
                   </label>
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", color: "#fff", cursor: "pointer" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-primary)", cursor: "pointer" }}>
                     <input 
                       type="radio" 
                       name="colorMode" 
@@ -277,7 +281,7 @@ export default function AddSong() {
               ) : (
                 // Playlist Color Options
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px", background: "rgba(255,255,255,0.02)", padding: "16px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", color: "#fff", cursor: "pointer" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-primary)", cursor: "pointer" }}>
                     <input 
                       type="radio" 
                       name="playlistColorMode" 
@@ -291,7 +295,7 @@ export default function AddSong() {
                       <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>Give every song in this playlist a different random glowing color</span>
                     </div>
                   </label>
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", color: "#fff", cursor: "pointer", marginTop: "8px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--text-primary)", cursor: "pointer", marginTop: "8px" }}>
                     <input 
                       type="radio" 
                       name="playlistColorMode" 
