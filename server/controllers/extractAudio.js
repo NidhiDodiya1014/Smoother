@@ -2,14 +2,33 @@ const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
+/**
+ * Determines the yt-dlp binary path dynamically.
+ * Order of priority:
+ * 1. Environment variable YTDLP_PATH (if valid)
+ * 2. Local binary in server/ folder (recommended for VPS)
+ * 3. System-installed 'yt-dlp'
+ */
 const getYtDlpPath = () => {
-  if (process.env.YTDLP_PATH) {
+  // 1. Check Env
+  if (process.env.YTDLP_PATH && fs.existsSync(process.env.YTDLP_PATH)) {
     return process.env.YTDLP_PATH;
   }
+  
+  // 2. Check Local Binary in Server Folder
+  const localDirBinary = path.join(__dirname, "../yt-dlp");
+  const localDirBinaryExe = path.join(__dirname, "../yt-dlp.exe");
+  
+  if (fs.existsSync(localDirBinary)) return localDirBinary;
+  if (fs.existsSync(localDirBinaryExe)) return localDirBinaryExe;
+
+  // 3. Platform Fallbacks
   if (process.platform === "win32") {
-    return "C:\\Windows\\yt-dlp.exe";
+    const commonWinPath = "C:\\Windows\\yt-dlp.exe";
+    return fs.existsSync(commonWinPath) ? commonWinPath : "yt-dlp";
   }
-  return "yt-dlp";
+
+  return "yt-dlp"; // Linux default
 };
 
 const YTDLP_PATH = getYtDlpPath();
@@ -24,16 +43,18 @@ const BASE_YTDLP_ARGS = [
   "--force-ipv4",
   "--no-cache-dir",
   "--geo-bypass",
-  "--socket-timeout", "15",
-  "--extractor-retries", "3",
-  "--fragment-retries", "3",
-  "--file-access-retries", "3",
+  "--no-check-certificates", // Vital for some VPS setups to avoid SSL handshakes
+  "--socket-timeout", "20",   // Slightly longer timeout for server stability
+  "--extractor-retries", "5",
+  "--fragment-retries", "5",
   "--concurrent-fragments", "5",
-  "--sleep-requests", "1",
-  "--sleep-interval", "1",
-  "--max-sleep-interval", "3",
   "--js-runtimes", "node",
-  "--ffmpeg-location", FFMPEG_LOCATION
+  // Fallback: Use system FFmpeg if the .ffmpeg-bin is empty/wrong (e.g. windows exes on linux)
+  ...(fs.existsSync(FFMPEG_LOCATION) && fs.readdirSync(FFMPEG_LOCATION).length > 0 
+      ? ["--ffmpeg-location", FFMPEG_LOCATION] 
+      : []),
+  // Base User Agent to simulate a real browser request
+  "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 ];
 
 const getClientArgs = (client) => {
@@ -70,7 +91,7 @@ const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
     const clientsToTry = [...PLAYER_CLIENTS, "none"];
 
     if (clientIndex >= clientsToTry.length) {
-      return reject(new Error("All player clients failed. YouTube may be blocking this server IP."));
+      return reject(new Error("All player clients failed. YouTube may be blocking this server IP. Check cookies.txt."));
     }
 
     const client = clientsToTry[clientIndex];
@@ -87,22 +108,19 @@ const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
       youtubeUrl
     ].flat();
 
-    console.log(`Running (client=${client}):`, YTDLP_PATH, args.join(" "));
-
     const yt = spawnYt(args);
 
     const timeout = setTimeout(() => {
       yt.kill("SIGKILL");
-      reject(new Error("yt-dlp timeout exceeded (10 minutes)"));
+      reject(new Error("yt-dlp extract timeout (10 mins)"));
     }, 10 * 60 * 1000);
 
     yt.stdout.on("data", (data) => {
-      console.log(`yt-dlp stdout: ${data.toString()}`);
+      console.log(`yt-dlp [${client}]: ${data.toString().trim().split('\n').pop()}`);
     });
 
     yt.stderr.on("data", (data) => {
       stderrOutput += data.toString();
-      console.error(`yt-dlp stderr: ${data.toString()}`);
     });
 
     yt.on("error", (err) => {
@@ -115,10 +133,7 @@ const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
 
       if (code !== 0) {
         if (clientIndex + 1 < clientsToTry.length) {
-          console.log(`Client "${client}" failed. Retrying with "${clientsToTry[clientIndex + 1]}"...`);
-          return tryExtractAudio(youtubeUrl, outputBasePath, clientIndex + 1)
-            .then(resolve)
-            .catch(reject);
+          return tryExtractAudio(youtubeUrl, outputBasePath, clientIndex + 1).then(resolve).catch(reject);
         }
         return reject(new Error(stderrOutput.slice(-500)));
       }
@@ -133,8 +148,7 @@ const tryExtractAudio = (youtubeUrl, outputBasePath, clientIndex = 0) => {
   });
 };
 
-const extractAudio = (youtubeUrl, outputBasePath) =>
-  tryExtractAudio(youtubeUrl, outputBasePath, 0);
+const extractAudio = (youtubeUrl, outputBasePath) => tryExtractAudio(youtubeUrl, outputBasePath, 0);
 
 const extractPlaylistItems = (playlistUrl) => {
   return new Promise((resolve, reject) => {
@@ -149,22 +163,15 @@ const extractPlaylistItems = (playlistUrl) => {
       playlistUrl
     ].flat();
 
-    console.log("Running:", YTDLP_PATH, args.join(" "));
-
     const yt = spawnYt(args);
 
     const timeout = setTimeout(() => {
       yt.kill("SIGKILL");
-      reject(new Error("yt-dlp playlist extraction timeout"));
-    }, 2 * 60 * 1000);
+      reject(new Error("Playlist extraction timeout"));
+    }, 3 * 60 * 1000);
 
-    yt.stdout.on("data", (data) => {
-      stdoutData += data.toString();
-    });
-
-    yt.stderr.on("data", (data) => {
-      stderrData += data.toString();
-    });
+    yt.stdout.on("data", (data) => { stdoutData += data.toString(); });
+    yt.stderr.on("data", (data) => { stderrData += data.toString(); });
 
     yt.on("error", (err) => {
       clearTimeout(timeout);
@@ -173,20 +180,16 @@ const extractPlaylistItems = (playlistUrl) => {
 
     yt.on("close", (code) => {
       clearTimeout(timeout);
+      if (code !== 0) return reject(new Error(stderrData.slice(-500)));
 
-      if (code !== 0) {
-        return reject(new Error(stderrData.slice(-500)));
+      try {
+        const items = stdoutData.trim().split(/\r?\n/).map(line => {
+          try { return JSON.parse(line); } catch { return null; }
+        }).filter(item => item && item.id);
+        resolve(items);
+      } catch {
+        reject(new Error("Failed to process playlist JSON"));
       }
-
-      const items = stdoutData.trim().split(/\r?\n/).map(line => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return null;
-        }
-      }).filter(item => item && item.id);
-
-      resolve(items);
     });
   });
 };
@@ -197,7 +200,7 @@ const extractVideoInfo = (videoUrl, clientIndex = 0) => {
     const clientsToTry = [...PLAYER_CLIENTS, "none"];
 
     if (clientIndex >= clientsToTry.length) {
-      return reject(new Error("All player clients failed during video info extraction."));
+      return reject(new Error("Video info extraction failed across all clients."));
     }
 
     const client = clientsToTry[clientIndex];
@@ -217,28 +220,17 @@ const extractVideoInfo = (videoUrl, clientIndex = 0) => {
 
     const timeout = setTimeout(() => {
       yt.kill("SIGKILL");
-      reject(new Error("yt-dlp video info timeout"));
+      reject(new Error("Video info timeout"));
     }, 60 * 1000);
 
-    yt.stdout.on("data", (data) => {
-      stdoutData += data.toString();
-    });
-
-    yt.stderr.on("data", (data) => {
-      stderrData += data.toString();
-    });
-
-    yt.on("error", (err) => {
-      clearTimeout(timeout);
-      reject(new Error(`yt-dlp spawn failed: ${err.message}`));
-    });
+    yt.stdout.on("data", (data) => { stdoutData += data.toString(); });
+    yt.stderr.on("data", (data) => { stderrData += data.toString(); });
 
     yt.on("close", (code) => {
       clearTimeout(timeout);
 
       if (code !== 0) {
         if (clientIndex + 1 < clientsToTry.length) {
-          console.log(`extractVideoInfo: client "${client}" failed. Retrying with "${clientsToTry[clientIndex + 1]}"...`);
           return extractVideoInfo(videoUrl, clientIndex + 1).then(resolve).catch(reject);
         }
         return reject(new Error(stderrData.slice(-500)));
@@ -248,8 +240,11 @@ const extractVideoInfo = (videoUrl, clientIndex = 0) => {
         const info = JSON.parse(stdoutData.trim());
         let finalTitle = info.title;
         
-        if (info.track) {
-          finalTitle = info.artist ? `${info.artist} - ${info.track}` : info.track;
+        // Smarter Metadata Clean
+        if (info.track && info.artist) {
+          finalTitle = `${info.artist} - ${info.track}`;
+        } else if (info.track) {
+          finalTitle = info.track;
         } else {
           finalTitle = finalTitle
             .replace(/\[.*?\]/g, "")
@@ -257,15 +252,14 @@ const extractVideoInfo = (videoUrl, clientIndex = 0) => {
             .replace(/\(Lyric.*?\)/gi, "")
             .replace(/\(Music Video\)/gi, "")
             .replace(/\(Audio\)/gi, "")
+            .replace(/\(feat\..*?\)/gi, "")
             .replace(/\|.*/, "")
+            .replace(/\s+/g, " ")
             .trim();
           
-          if (finalTitle.endsWith("-")) {
-            finalTitle = finalTitle.slice(0, -1).trim();
-          }
+          if (finalTitle.endsWith("-")) finalTitle = finalTitle.slice(0, -1).trim();
         }
         
-        // Ensure we have a fallback if title gets completely stripped
         if (!finalTitle) finalTitle = info.title;
 
         resolve({ title: finalTitle, id: info.id });
