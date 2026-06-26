@@ -258,6 +258,12 @@ export const AudioProvider = ({ children }) => {
         }
 
         if (currentIndex + 1 < queue.length) {
+          const nextSong = queue[currentIndex + 1];
+          // Drive audio directly within the 'ended' event so the browser
+          // allows play() even when the screen is locked.
+          currentSongRef.current = nextSong.id;
+          audio.src = nextSong.audioUrl;
+          audio.play().catch(() => {});
           setCurrentIndex(currentIndex + 1);
         } else if (isLooping && queue.length > 0) {
           if (currentIndex === 0 && queue.length === 1) {
@@ -265,6 +271,10 @@ export const AudioProvider = ({ children }) => {
             audio.currentTime = 0;
             audio.play().catch(() => {});
           } else {
+            const firstSong = queue[0];
+            currentSongRef.current = firstSong.id;
+            audio.src = firstSong.audioUrl;
+            audio.play().catch(() => {});
             setCurrentIndex(0);
           }
         } else {

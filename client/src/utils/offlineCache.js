@@ -14,21 +14,23 @@ export function registerServiceWorker() {
   }
 }
 
-export function cacheSong(audioUrl) {
-  if (navigator.serviceWorker?.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: "CACHE_AUDIO",
-      url: audioUrl,
-    });
+export async function cacheSong(audioUrl) {
+  if (!("serviceWorker" in navigator)) return;
+  // ready resolves once a SW is active — handles the race where controller
+  // is still null right after first registration.
+  const reg = await navigator.serviceWorker.ready;
+  const sw = navigator.serviceWorker.controller ?? reg.active;
+  if (sw) {
+    sw.postMessage({ type: "CACHE_AUDIO", url: audioUrl });
   }
 }
 
-export function uncacheSong(audioUrl) {
-  if (navigator.serviceWorker?.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: "UNCACHE_AUDIO",
-      url: audioUrl,
-    });
+export async function uncacheSong(audioUrl) {
+  if (!("serviceWorker" in navigator)) return;
+  const reg = await navigator.serviceWorker.ready;
+  const sw = navigator.serviceWorker.controller ?? reg.active;
+  if (sw) {
+    sw.postMessage({ type: "UNCACHE_AUDIO", url: audioUrl });
   }
 }
 
