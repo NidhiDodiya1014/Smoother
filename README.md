@@ -7,7 +7,7 @@ Smoother is a glassmorphic music web application that lets you build a personali
 ## 📸 Walkthrough: How the Website Works
 
 ### 1. Secure Authentication
-Users sign up or log in to manage their private music collection safely via secure JWT credentials.
+Users sign up or log in to manage their private music collection.
 
 ![Login Screen](assets/login.png)
 
