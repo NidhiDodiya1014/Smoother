@@ -215,6 +215,7 @@ export const AudioProvider = ({ children }) => {
   }, [currentTime, duration]);
 
   const hasLoadedInitially = useRef(false);
+  const currentSongRef = useRef(null);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -299,8 +300,6 @@ export const AudioProvider = ({ children }) => {
       audio.removeEventListener("ended", handleEnded);
     };
   }, [queue, currentIndex, isLooping, isPlaying, setCurrentIndex, setQueue]);
-
-  const currentSongRef = useRef(null);
 
   useEffect(() => {
     const audio = audioRef.current;

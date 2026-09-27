@@ -13,6 +13,8 @@ const {
   cancelAllDownloads
 } = require("../controllers/songsController");
 
+const { getRecommendations } = require("../controllers/recommendationsController");
+
 router.post("/addSong", authMiddleware, addSong);
 
 router.get("/songs", authMiddleware, getSongs);
@@ -26,5 +28,7 @@ router.get("/downloads/active", authMiddleware, getActiveDownloads);
 router.delete("/downloads/all", authMiddleware, cancelAllDownloads);
 
 router.delete("/downloads/:youtubeId", authMiddleware, cancelDownload);
+
+router.get("/songs/recommendations", authMiddleware, getRecommendations);
 
 module.exports = router;

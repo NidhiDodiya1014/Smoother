@@ -2,17 +2,21 @@ import { useEffect, useState } from "react";
 import API from "../config/api";
 import { useAudio } from "../contexts/AudioContext";
 import { useQueue } from "../contexts/QueueContext";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { cacheSong, uncacheSong, getCachedUrls, onSWMessage } from "../utils/offlineCache";
 
 function Home() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { addToQueue } = useQueue();
 
   const [songs, setSongs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [recommendations, setRecommendations] = useState([]);
+  const [loadingRecs, setLoadingRecs] = useState(false);
+  const [recsError, setRecsError] = useState("");
   const [expandedSong, setExpandedSong] = useState(null);
   const [autoPlay, setAutoPlay] = useState(false);
   const [addedToQueueIds, setAddedToQueueIds] = useState([]);
@@ -109,6 +113,20 @@ function Home() {
       console.error("Failed to load songs", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRecommendations = async () => {
+    setLoadingRecs(true);
+    setRecsError("");
+    try {
+      const res = await API.get("/songs/recommendations");
+      setRecommendations(res.data.recommendations || []);
+    } catch (err) {
+      setRecsError("Could not load recommendations. Please try again.");
+      console.error("Recommendations error", err);
+    } finally {
+      setLoadingRecs(false);
     }
   };
 
@@ -272,8 +290,8 @@ function Home() {
     setSelectedIds([]);
   };
 
-  const filteredSongs = songs.filter((song) => 
-    song.title.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredSongs = songs.filter((song) =>
+    (song.title || "").toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (expandedSong) {
@@ -849,6 +867,80 @@ function Home() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {!loading && songs.length > 0 && (
+        <div style={{ marginTop: "48px", paddingTop: "32px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "20px", flexWrap: "wrap" }}>
+            <h2 className="page-title text-gradient" style={{ margin: 0, fontSize: "1.5rem" }}>
+              AI Recommendations
+            </h2>
+            <button
+              className="btn-small btn-outline-neon"
+              style={{ color: "var(--accent-cyan)", borderColor: "var(--accent-cyan)", display: "flex", alignItems: "center", gap: "6px" }}
+              onClick={fetchRecommendations}
+              disabled={loadingRecs}
+            >
+              {loadingRecs ? (
+                <>
+                  <div className="spinner-neon" style={{ width: "14px", height: "14px", borderWidth: "2px" }}></div>
+                  Getting suggestions…
+                </>
+              ) : recommendations.length > 0 ? "↻ Refresh" : "✨ Get Suggestions"}
+            </button>
+          </div>
+
+          {recsError && (
+            <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "12px", padding: "12px", marginBottom: "16px", color: "#ef4444", fontSize: "0.9rem" }}>
+              {recsError}
+            </div>
+          )}
+
+          {!loadingRecs && recommendations.length === 0 && !recsError && (
+            <div style={{ color: "var(--text-secondary)", fontSize: "0.9rem" }}>
+              Click "Get Suggestions" and AI will analyze your library to find songs you might love.
+            </div>
+          )}
+
+          {recommendations.length > 0 && (
+            <div className="song-grid">
+              {recommendations.map((rec, idx) => (
+                <div
+                  key={idx}
+                  className="song-card"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(100,200,255,0.12)" }}
+                >
+                  <div className="song-card-info">
+                    <div className="song-card-title" style={{ fontSize: "0.95rem" }}>{rec.title}</div>
+                    <div style={{ color: "var(--text-secondary)", fontSize: "0.8rem", marginTop: "4px" }}>{rec.artist}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "6px" }}>
+                      <span style={{ fontSize: "0.7rem", color: "var(--accent-cyan)", background: "rgba(100,200,255,0.1)", padding: "2px 8px", borderRadius: "100px", fontWeight: "600", letterSpacing: "0.5px" }}>AI Pick</span>
+                    </div>
+                  </div>
+                  <div className="song-card-actions" style={{ flexDirection: "column", gap: "6px" }}>
+                    <a
+                      href={`https://www.youtube.com/results?search_query=${encodeURIComponent(rec.title + " " + rec.artist)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-small btn-outline-neon"
+                      style={{ color: "#ef4444", borderColor: "#ef4444", textDecoration: "none", fontSize: "0.75rem", padding: "5px 10px", display: "flex", alignItems: "center", gap: "4px" }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                      YouTube
+                    </a>
+                    <button
+                      className="btn-small btn-outline-neon"
+                      style={{ color: "var(--accent-cyan)", borderColor: "var(--accent-cyan)", fontSize: "0.75rem", padding: "5px 10px" }}
+                      onClick={() => navigate("/add-song", { state: { prefill: `${rec.title} ${rec.artist}` } })}
+                    >
+                      + Add
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
