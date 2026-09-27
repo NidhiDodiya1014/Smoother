@@ -160,7 +160,6 @@ export default function AddSong() {
         await new Promise(resolve => setTimeout(resolve, minimumDelay - elapsedTime));
       }
 
-      console.log("Response:", response.data);
       setSuccess(response.data.message || "🎵 Added successfully!");
 
       setTitle("");

@@ -256,13 +256,15 @@ const getSongs = async (req, res) => {
       .populate("song")
       .sort({ createdAt: -1 });
 
-    const formattedSongs = songs.map(s => ({
-      id: s._id,
-      title: s.customTitle,
-      color: s.color || "",
-      audioUrl: s.song.audioUrl,
-      youtubeId: s.song.youtubeId
-    }));
+    const formattedSongs = songs
+      .filter(s => s.song)
+      .map(s => ({
+        id: s._id,
+        title: s.customTitle,
+        color: s.color || "",
+        audioUrl: s.song.audioUrl,
+        youtubeId: s.song.youtubeId
+      }));
 
     res.json(formattedSongs);
 
