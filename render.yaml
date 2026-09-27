@@ -17,7 +17,7 @@ services:
         sync: false
       - key: CLOUDINARY_SECRET
         sync: false
-      - key: ANTHROPIC_API_KEY
+      - key: GROQ_API_KEY
         sync: false
       - key: FRONTEND_URL
         sync: false
