@@ -1,4 +1,4 @@
-const Anthropic = require("@anthropic-ai/sdk");
+const Groq = require("groq-sdk");
 const UserSong = require("../models/UserSong");
 
 const getRecommendations = async (req, res) => {
@@ -14,10 +14,10 @@ const getRecommendations = async (req, res) => {
 
     const songTitles = userSongs.map(s => s.customTitle).filter(Boolean);
 
-    const client = new Anthropic();
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-    const message = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
       max_tokens: 1024,
       messages: [
         {
@@ -33,7 +33,7 @@ Return exactly this format:
       ]
     });
 
-    const text = message.content[0].text.trim();
+    const text = completion.choices[0]?.message?.content?.trim() || "[]";
     let recommendations;
 
     try {

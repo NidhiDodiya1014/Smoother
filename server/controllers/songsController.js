@@ -68,7 +68,20 @@ const processUserQueue = async (userId) => {
       task.status = "downloading";
 
       try {
-        const { id: youtubeId, title, url: youtubeUrl, color } = task;
+        let { id: youtubeId, title, url: youtubeUrl, color } = task;
+
+        if (task.needsTitleFetch) {
+          try {
+            const info = await extractVideoInfo(youtubeUrl);
+            task.title = formatYoutubeTitle(info.title);
+            title = task.title;
+          } catch (err) {
+            console.error("Failed to fetch video title:", err);
+            task.title = "Unknown Track";
+            title = "Unknown Track";
+          }
+          task.needsTitleFetch = false;
+        }
 
         const existingSong = await Song.findOne({ youtubeId });
 
@@ -156,7 +169,7 @@ const processUserQueue = async (userId) => {
   }
 };
 
-const enqueueDownload = (userId, youtubeId, title, url, color) => {
+const enqueueDownload = (userId, youtubeId, title, url, color, needsTitleFetch = false) => {
   if (!activeDownloads[userId]) activeDownloads[userId] = [];
 
   if (!activeDownloads[userId].find(t => t.id === youtubeId)) {
@@ -165,7 +178,8 @@ const enqueueDownload = (userId, youtubeId, title, url, color) => {
       title: title || "Unknown Track",
       url,
       color,
-      status: "queued"
+      status: "queued",
+      needsTitleFetch
     });
   }
 
@@ -220,28 +234,17 @@ const addSong = async (req, res) => {
 
     let finalTitle = title ? title.trim() : null;
 
+    let songColor = color;
+    if (colorMode === "random" || !color) {
+      songColor = getRandomNeonColor();
+    }
+
+    const needsTitleFetch = !finalTitle;
+    enqueueDownload(req.userId, youtubeId, finalTitle || "Fetching title...", youtubeUrl, songColor, needsTitleFetch);
+
     res.json({
       message: "Song processing started! It is downloading and adding to your library in the background."
     });
-
-    (async () => {
-      if (!finalTitle) {
-        try {
-          const info = await extractVideoInfo(youtubeUrl);
-          finalTitle = formatYoutubeTitle(info.title);
-        } catch (err) {
-          console.error("Failed to extract video info:", err);
-          finalTitle = "Unknown Track";
-        }
-      }
-
-      let songColor = color;
-      if (colorMode === "random" || !color) {
-        songColor = getRandomNeonColor();
-      }
-
-      enqueueDownload(req.userId, youtubeId, finalTitle, youtubeUrl, songColor);
-    })();
 
   } catch (err) {
     console.error("ADD SONG ERROR:", err);
